@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Padel-Posten</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=2">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📰</text></svg>">
+</head>
+<body>
+<div id="gate" class="gate">
+  <div class="gate-box paper">
+    <div class="gate-kicker">Kun for abonnenter</div>
+    <h1 class="masthead-title small">Padel-Posten</h1>
+    <div class="rule-double"></div>
+    <p class="gate-text">Denne avisen leses kun av de 15 utvalgte. Oppgi passordet fra redaksjonen for å bla videre.</p>
+    <form id="gate-form" autocomplete="off">
+      <input id="gate-pw" type="password" placeholder="Passord" aria-label="Passord" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button type="submit" class="btn">Åpne avisen</button>
+    </form>
+    <p id="gate-err" class="gate-err" hidden>Feil passord. Redaksjonen har notert seg forsøket.</p>
+    <p class="gate-foot">Grunnlagt 2026 · Pris: Én runde i baren</p>
+  </div>
+</div>
+<div id="app" hidden>
+  <header class="masthead paper">
+    <div class="ears"><span class="ear">Vær: Sol, 24°<br>og padelfeber</span><span class="ear right">Pris: Én runde<br>i baren</span></div>
+    <h1 class="masthead-title"><a href="#/">Padel-Posten</a></h1>
+    <div class="masthead-sub">Haciendaens eneste uavhengige avis · La Quinta</div>
+    <div class="dateline"><span id="dl-edition"></span><span id="dl-date"></span></div>
+    <nav class="nav">
+      <a href="#/">Forsiden</a><a href="#/dobbeltgjengere">Dobbeltgjengere</a><a href="#/rom">Romfordeling</a><a href="#/arkiv">Arkiv</a><a href="#/skriv" class="nav-cta">✎ Skriv sak</a>
+    </nav>
+  </header>
+  <main id="view" class="paper"></main>
+  <footer class="foot paper">
+    <div class="rule-double"></div>
+    <p>Padel-Posten · Ansvarlig redaktør: Gruppechatten · Trykket på ekte digitalt avispapir</p>
+    <p class="tiny">Kjendisbilder: Wikimedia Commons, se kreditering under hvert bilde. Dobbeltgjengerne er ren tull og ment som god humor.</p>
+    <p class="tiny"><a href="#" id="logout">Logg ut</a> · <span id="sync-status">Kobler til trykkeriet…</span></p>
+  </footer>
+</div>
+<div id="reel" class="reel" hidden>
+  <div class="reel-grain"></div>
+  <div class="reel-stage" id="reel-stage"></div>
+  <button class="reel-close" id="reel-close" aria-label="Lukk">✕</button>
+</div>
+<div id="toast" class="toast" hidden></div>
+<script src="app.js?v=2"></script>
+</body>
+</html>
