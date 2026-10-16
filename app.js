@@ -292,6 +292,7 @@ function viewProgram() {
   return `<div class="kicker">Offisielt program</div><h2 class="headline" style="font-size:34px">Programmet</h2>
   <p class="intro">Seks dager, én villa i La Quinta og et urovekkende antall padeltimer. Reisesjefen har lagt planen. Avisen tar ikke ansvar for avvik.</p>
   ${P.days.map(d => `<section class="prog-day${d.date === today ? ' is-today' : ''}"><h3 class="prog-h"><span>${esc(fmtProgDay(d.date))}</span>${d.date === today ? '<em>I DAG</em>' : ''}</h3><div class="prog-sub">${esc(d.title)}</div>${progItems(d)}</section>`).join('')}
+  ${(P.staff || []).length ? `<section class="venue staff"><div class="kicker">Reisens stab</div><table class="prog">${P.staff.map(x => `<tr><td class="pt">${esc(x[0])}</td><td><b>${esc(x[1])}</b></td></tr>`).join('')}</table>${P.staffQuip ? `<p class="pq">${esc(P.staffQuip)}</p>` : ''}</section>` : ''}
   ${P.villa ? `<section class="venue villa"><div class="kicker">Bosted</div><h3 class="prog-h"><span>${esc(P.villa.name)}</span></h3><div class="prog-sub">${esc(P.villa.where || '')}</div>${P.villa.stats ? `<div class="vstats">${P.villa.stats.map(x => `<div><b>${esc(x[0])}</b><span>${esc(x[1])}</span></div>`).join('')}</div>` : ''}<p>${esc(P.villa.desc || '')}</p>${(P.villa.quips || []).length ? `<ul class="vquips">${P.villa.quips.map(q => `<li>${esc(q)}</li>`).join('')}</ul>` : ''}</section>` : ''}
   ${V.name ? `<section class="venue"><div class="kicker">Arenaen</div><h3 class="prog-h"><span>${esc(V.name)}</span></h3><div class="prog-sub">${esc(V.where || '')}</div><p>${esc(V.desc || '')}</p>${V.quip ? `<p class="pq">${esc(V.quip)}</p>` : ''}</section>` : ''}`;
 }
@@ -312,7 +313,7 @@ function viewLooks(S) {
       <div class="guy-head">
         <div><div class="guy-photo halftone" ${S.photos[g.id] ? `data-img="${S.photos[g.id]}"` : g.photo ? `data-defimg="${esc(g.photo)}"` : ''}><div class="silhouette">${SIL}</div></div>
         <label class="upload-btn">📷 ${S.photos[g.id] || g.photo ? 'Bytt bilde' : 'Last opp bilde'}<input type="file" accept="image/*" data-up="${g.id}"></label></div>
-        <div><p class="guy-name">${esc(g.name)}</p><div class="guy-room">${esc(g.room)}</div><p class="guy-tag">${esc(g.tag)}</p>
+        <div><p class="guy-name">${esc(g.name)}</p>${g.role ? `<div class="guy-role">${esc(g.role)}</div>` : ''}<div class="guy-room">${esc(g.room)}</div><p class="guy-tag">${esc(g.tag)}</p>
         <p class="leader">${tot ? `Folkets dom så langt: <b>${esc(g.looks[lead].name)}</b> (${tot} stemme${tot > 1 ? 'r' : ''})` : 'Ingen stemmer ennå. Bli den første!'}</p></div>
       </div>
       <div class="looks">${g.looks.map((l, i) => {
@@ -457,7 +458,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 10;
+const APP_VER = 11;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;

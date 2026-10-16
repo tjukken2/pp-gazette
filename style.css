@@ -170,3 +170,6 @@ textarea{min-height:220px;line-height:1.45}
 .vstats span{font-size:13px;text-transform:uppercase;letter-spacing:.06em}
 .vquips{margin:6px 0 0;padding-left:18px}
 .vquips li{font-style:italic;color:var(--red);font-size:15px;margin:4px 0}
+
+.guy-role{display:inline-block;background:var(--ink);color:var(--paper);font-family:"Playfair Display",serif;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;margin:2px 0 4px}
+.staff .prog .pt{white-space:normal;width:48%;font-weight:400;font-style:italic}
