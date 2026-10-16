@@ -1,5 +1,7 @@
 """Trykkeriet: copies new encrypted messages from the ntfy topic into data/events.json
-(and attachments into data/files/) so they persist beyond ntfy's 12h cache."""
+(and attachments into data/files/) so they persist beyond ntfy's 12h message cache and
+3h attachment expiry. Photos, video chunks ({t:'vchunk'}, < 2 MB each) and video posters are
+all ordinary attachments: every one is saved as data/files/<message id>.bin (still encrypted)."""
 import json, os, sys, urllib.request
 TOPIC = os.environ["TOPIC"]
 UA = {"User-Agent": "padel-posten-sync/1.0"}
@@ -26,13 +28,17 @@ for line in raw.splitlines():
         continue
     rec = ex or {"id": m["id"], "time": m["time"], "msg": msg}
     if att and att.get("size", 0) <= 16_000_000:
-        try:
-            data = get(att["url"])
-            fn = f"data/files/{m['id']}.bin"
-            open(fn, "wb").write(data)
-            rec["file"] = fn
-        except Exception as e:
-            print("attachment failed", m["id"], e, file=sys.stderr)
+        for attempt in range(3):
+            try:
+                data = get(att["url"])
+                if att.get("size") and len(data) != att["size"]:
+                    raise IOError(f"short read {len(data)}/{att['size']}")
+                fn = f"data/files/{m['id']}.bin"
+                open(fn, "wb").write(data)
+                rec["file"] = fn
+                break
+            except Exception as e:
+                print("attachment failed", m["id"], attempt, e, file=sys.stderr)
     if not ex:
         db["events"].append(rec)
         known[m["id"]] = rec
