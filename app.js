@@ -290,8 +290,9 @@ function viewProgram() {
   const P = C.program; if (!P) return '<p class="empty">Programmet er ikke trykket ennå.</p>';
   const today = osloDate(), V = P.venue || {};
   return `<div class="kicker">Offisielt program</div><h2 class="headline" style="font-size:34px">Programmet</h2>
-  <p class="intro">Seks dager, én villa i Marbella og et urovekkende antall padeltimer. Reisesjefen har lagt planen. Avisen tar ikke ansvar for avvik.</p>
+  <p class="intro">Seks dager, én villa i La Quinta og et urovekkende antall padeltimer. Reisesjefen har lagt planen. Avisen tar ikke ansvar for avvik.</p>
   ${P.days.map(d => `<section class="prog-day${d.date === today ? ' is-today' : ''}"><h3 class="prog-h"><span>${esc(fmtProgDay(d.date))}</span>${d.date === today ? '<em>I DAG</em>' : ''}</h3><div class="prog-sub">${esc(d.title)}</div>${progItems(d)}</section>`).join('')}
+  ${P.villa ? `<section class="venue villa"><div class="kicker">Bosted</div><h3 class="prog-h"><span>${esc(P.villa.name)}</span></h3><div class="prog-sub">${esc(P.villa.where || '')}</div>${P.villa.stats ? `<div class="vstats">${P.villa.stats.map(x => `<div><b>${esc(x[0])}</b><span>${esc(x[1])}</span></div>`).join('')}</div>` : ''}<p>${esc(P.villa.desc || '')}</p>${(P.villa.quips || []).length ? `<ul class="vquips">${P.villa.quips.map(q => `<li>${esc(q)}</li>`).join('')}</ul>` : ''}</section>` : ''}
   ${V.name ? `<section class="venue"><div class="kicker">Arenaen</div><h3 class="prog-h"><span>${esc(V.name)}</span></h3><div class="prog-sub">${esc(V.where || '')}</div><p>${esc(V.desc || '')}</p>${V.quip ? `<p class="pq">${esc(V.quip)}</p>` : ''}</section>` : ''}`;
 }
 function viewRooms() {
@@ -449,7 +450,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 8;
+const APP_VER = 9;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
