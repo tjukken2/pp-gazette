@@ -132,3 +132,12 @@ textarea{min-height:220px;line-height:1.45}
 
 .mellomtittel{font-family:"Playfair Display",serif;font-weight:900;font-size:1.25em;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.02em;border-top:1px solid var(--rule);padding-top:8px}
 .article-photo.inline{margin:14px 0}
+
+.reel-video{margin:10px 0 14px;border:1px solid var(--rule);background:#120e09;padding:0}
+.reel-video video,.reel-poster{display:block;width:100%;aspect-ratio:16/9;background:#120e09}
+.reel-poster{position:relative;cursor:pointer}
+.reel-poster img{width:100%;height:100%;object-fit:cover;display:block}
+.reel-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:66px;height:66px;border-radius:50%;border:2px solid #efe4c8;background:rgba(18,14,9,.7);color:#efe4c8;font-size:28px;padding-left:6px;cursor:pointer}
+.reel-status{position:absolute;left:0;right:0;bottom:0;padding:4px 8px;color:#efe4c8;font-size:13px;background:linear-gradient(transparent,rgba(0,0,0,.7))}
+.reel-status:empty{display:none}
+.reel-video .caption{background:var(--paper,#efe4c8);margin:0;padding:6px 8px}

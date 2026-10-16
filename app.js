@@ -184,7 +184,35 @@ function render() {
     const front = past.length ? past[past.length - 1] : (ds[0] || today);
     v.innerHTML = viewEdition(S, front, true);
   }
+  const slot = $('#reel-slot'); if (slot) slot.appendChild(reelVideo());
   hydrateImages(S);
+}
+let reelEl;
+function reelVideo() {
+  if (reelEl) return reelEl;
+  const R = C.reel; reelEl = document.createElement('div'); reelEl.className = 'reel-box';
+  if (!R) { reelEl.hidden = true; return reelEl; }
+  reelEl.innerHTML = `<div class="reel-poster"><img alt=""><button class="reel-play" aria-label="Spill av">▶</button><div class="reel-status"></div></div>`;
+  defaultImageUrl(R.poster).then(u => { if (u) reelEl.querySelector('img').src = u; });
+  const st = reelEl.querySelector('.reel-status');
+  reelEl.querySelector('.reel-poster').onclick = async () => {
+    if (reelEl.dataset.loading) return; reelEl.dataset.loading = '1';
+    let done = 0; st.textContent = 'Henter filmen fra trykkeriet… 0 %';
+    try {
+      const bufs = await Promise.all(R.parts.map(async p => {
+        const r = await fetchFirst([p, REPO_RAW + p]); const t = (await r.text()).trim();
+        const raw = await decBytes(b64.dec(t.slice(3)));
+        done++; st.textContent = `Henter filmen fra trykkeriet… ${Math.round(done / R.parts.length * 100)} %`; return raw;
+      }));
+      const v = document.createElement('video');
+      v.controls = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
+      v.poster = reelEl.querySelector('img').src; v.preload = 'auto';
+      v.src = URL.createObjectURL(new Blob(bufs, { type: 'video/mp4' }));
+      reelEl.innerHTML = ''; reelEl.appendChild(v);
+      v.play().catch(() => {});
+    } catch (e) { delete reelEl.dataset.loading; st.textContent = 'Filmen kom ikke fram. Trykk for å prøve igjen.'; }
+  };
+  return reelEl;
 }
 function richParas(a) {
   return a.body.split(/\n\s*\n|\n/).filter(p => p.trim()).map(p => {
@@ -212,7 +240,7 @@ function viewEdition(S, date, front) {
   const i = dates.indexOf(date);
   const prev = dates[i + 1], next = dates[i - 1];
   let html = `<div class="kicker" style="text-align:center">${esc(edLabel(date))} · ${esc(fmtDate(date))}</div>`;
-  if (front) html += `<div class="reel-teaser" id="reel-open"><span class="play">▶</span><span><b>Se dagens nyhetsinnslag</b><br><small>Filmavisen fra Haciendaen – ca. 25 sekunder</small></span></div>`;
+  if (front) html += `<figure class="reel-video"><div id="reel-slot"></div><figcaption class="caption">▶ ${esc((C.reel && C.reel.label) || 'Dagens nyhetsinnslag')}</figcaption></figure>`;
   if (!arts.length) html += `<p class="empty">Ingen saker i denne utgaven ennå. Redaksjonen sover. <a href="#/skriv">Skriv den første!</a></p>`;
   else {
     html += articleHtml(arts[0], true);
@@ -223,7 +251,6 @@ function viewEdition(S, date, front) {
     ${next ? `<a class="btn ghost" href="#/utgave/${next}">Neste utgave →</a>` : ''}
     <a class="btn" href="#/skriv">✎ Skriv dagens sak</a></div>`;
   setTimeout(() => {
-    const r = $('#reel-open'); if (r) r.onclick = () => playReel(S);
     document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
       if (!confirm('Trekke tilbake saken? Den forsvinner for alle.')) return;
       try { await publish({ t: 'del', aid: b.dataset.del, by: clientId }); toast('Saken er trukket tilbake.'); render(); } catch (e) { toast(e.message); }
