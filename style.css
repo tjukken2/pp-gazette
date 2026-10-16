@@ -129,3 +129,6 @@ textarea{min-height:220px;line-height:1.45}
 @keyframes spinIn{0%{transform:scale(.05) rotate(-1080deg);opacity:0}70%{opacity:1}100%{transform:scale(1) rotate(-3deg)}}
 @keyframes flick{0%{opacity:1}50%{opacity:.93}100%{opacity:1}}
 @keyframes grain{0%{transform:translate(0,0)}25%{transform:translate(-5%,3%)}50%{transform:translate(4%,-4%)}75%{transform:translate(-3%,-2%)}100%{transform:translate(2%,5%)}}
+
+.mellomtittel{font-family:"Playfair Display",serif;font-weight:900;font-size:1.25em;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.02em;border-top:1px solid var(--rule);padding-top:8px}
+.article-photo.inline{margin:14px 0}

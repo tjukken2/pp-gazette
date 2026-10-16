@@ -186,6 +186,14 @@ function render() {
   }
   hydrateImages(S);
 }
+function richParas(a) {
+  return a.body.split(/\n\s*\n|\n/).filter(p => p.trim()).map(p => {
+    const m = p.match(/^\[\[bilde:(\d+)\]\]$/);
+    if (m) { const x = (a.extra || [])[+m[1] - 1]; return x ? `<figure class="article-photo inline"><div class="halftone" data-defimg="${esc(x.photo)}"><div class="initials">⌛</div></div>${x.caption ? `<figcaption class="caption">${esc(x.caption)}</figcaption>` : ''}</figure>` : ''; }
+    if (p.startsWith('## ')) return `<h4 class="mellomtittel">${esc(p.slice(3))}</h4>`;
+    return `<p>${esc(p)}</p>`;
+  }).join('');
+}
 function articleHtml(a, lead) {
   const own = !a.seed && a.by === clientId;
   return `<article class="${lead ? 'lead' : 'secondary'}" data-aid="${esc(a.aid)}">
@@ -194,7 +202,7 @@ function articleHtml(a, lead) {
     ${a.sub ? `<p class="deck">${esc(a.sub)}</p>` : ''}
     <div class="byline"><span>Av ${esc(a.author || 'Anonym kilde')}</span><span>${esc(fmtDate(a.date).replace(/^\w+ /, ''))}</span></div>
     ${a.photo || a.defphoto ? `<figure class="article-photo"><div class="halftone" ${a.photo ? `data-img="${esc(a.photo)}"` : `data-defimg="${esc(a.defphoto)}"`}><div class="initials">⌛</div></div>${a.caption ? `<figcaption class="caption">${esc(a.caption)}</figcaption>` : ''}</figure>` : ''}
-    <div class="body">${paras(a.body)}</div>
+    <div class="body">${a.seed ? richParas(a) : paras(a.body)}</div>
     ${own ? `<button class="del" data-del="${esc(a.aid)}">Trekk tilbake saken</button>` : ''}
   </article>`;
 }
