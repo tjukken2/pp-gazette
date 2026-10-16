@@ -147,3 +147,19 @@ textarea{min-height:220px;line-height:1.45}
 .pic img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;filter:grayscale(1) sepia(.3)}
 .pic input{width:100%;margin-top:4px;font-size:14px}
 .pic-x{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;border:none;background:var(--ink);color:var(--paper);cursor:pointer}
+
+.today-box{border:3px double var(--rule);padding:10px 12px;margin:12px 0 16px;background:rgba(0,0,0,.035)}
+.tb-head{display:flex;justify-content:space-between;font-family:"Playfair Display",serif;font-weight:900;letter-spacing:.08em;border-bottom:1px solid var(--rule);padding-bottom:4px;color:var(--red)}
+.tb-title{font-family:"Playfair Display",serif;font-weight:700;font-size:1.15em;margin:6px 0 4px}
+.tb-more{display:block;text-align:right;font-size:14px;margin-top:6px;color:var(--ink)}
+.prog{width:100%;border-collapse:collapse}
+.prog td{vertical-align:top;padding:6px 4px;border-bottom:1px dotted var(--ink2)}
+.prog tr:last-child td{border-bottom:none}
+.prog .pt{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700;width:1%;padding-right:10px}
+.pn{display:block;font-size:14px;color:var(--ink2)}
+.pq{display:block;font-style:italic;font-size:14px;color:var(--red)}
+.prog-day,.venue{border-top:3px double var(--rule);margin-top:14px;padding-top:8px}
+.prog-day.is-today{background:rgba(139,26,16,.06);padding:8px}
+.prog-h{font-family:"Playfair Display",serif;font-weight:900;font-size:1.35em;margin:0;display:flex;justify-content:space-between;align-items:baseline;text-transform:uppercase}
+.prog-h em{font-style:normal;font-size:.6em;color:#fff;background:var(--red);padding:2px 6px;letter-spacing:.08em}
+.prog-sub{font-style:italic;margin:2px 0 6px}

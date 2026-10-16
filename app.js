@@ -174,6 +174,7 @@ function render() {
   let m;
   if (h.startsWith('#/dobbeltgjengere')) { setActive('#/dobbeltgjengere'); v.innerHTML = viewLooks(S); bindLooks(); }
   else if (h.startsWith('#/rom')) { setActive('#/rom'); v.innerHTML = viewRooms(); }
+  else if (h.startsWith('#/program')) { setActive('#/program'); v.innerHTML = viewProgram(); }
   else if (h.startsWith('#/arkiv')) { setActive('#/arkiv'); v.innerHTML = viewArchive(S); }
   else if (h.startsWith('#/skriv')) { setActive('#/skriv'); if (!$('#write-form')) { v.innerHTML = viewWrite(); bindWrite(); } return; }
   else if ((m = h.match(/^#\/utgave\/(\d{4}-\d\d-\d\d)/))) { setActive(''); v.innerHTML = viewEdition(S, m[1]); }
@@ -252,6 +253,7 @@ function viewEdition(S, date, front) {
   const prev = dates[i + 1], next = dates[i - 1];
   let html = `<div class="kicker" style="text-align:center">${esc(edLabel(date))} · ${esc(fmtDate(date))}</div>`;
   if (front) html += `<figure class="reel-video"><div id="reel-slot"></div><figcaption class="caption">▶ ${esc((C.reel && C.reel.label) || 'Dagens nyhetsinnslag')}</figcaption></figure>`;
+  if (front) html += todayBox();
   if (!arts.length) html += `<p class="empty">Ingen saker i denne utgaven ennå. Redaksjonen sover. <a href="#/skriv">Skriv den første!</a></p>`;
   else {
     html += articleHtml(arts[0], true);
@@ -274,6 +276,23 @@ function viewArchive(S) {
   const ds = Object.keys(by).sort().reverse();
   return `<h2 class="headline" style="font-size:34px">Arkivet</h2><p class="intro">Alle utgaver av Padel-Posten. Bevis for alt som er sagt og gjort.</p>
   <div class="arch">${ds.map(d => `<a href="#/utgave/${d}"><div class="d">${esc(edLabel(d))} · ${esc(fmtDate(d))}</div><div class="h">${esc(by[d][0].headline)}</div><div class="tiny">${by[d].length} sak${by[d].length > 1 ? 'er' : ''}</div></a>`).join('')}</div>`;
+}
+const progDays = () => (C.program && C.program.days) || [];
+const fmtProgDay = ds => { const s = new Intl.DateTimeFormat('nb-NO', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(ds + 'T12:00:00Z')); const t = s.replace(/([a-zæøå])\./gi, '$1'); return t.charAt(0).toUpperCase() + t.slice(1); };
+function progItems(d) {
+  return `<table class="prog">${d.items.map(i => `<tr><td class="pt">${esc(i.t)}</td><td><b>${esc(i.what)}</b>${i.note ? `<span class="pn">${esc(i.note)}</span>` : ''}${i.quip ? `<span class="pq">${esc(i.quip)}</span>` : ''}</td></tr>`).join('')}</table>`;
+}
+function todayBox() {
+  const d = progDays().find(x => x.date === osloDate()); if (!d) return '';
+  return `<aside class="today-box"><div class="tb-head"><span>I DAG</span><span>${esc(fmtProgDay(d.date))}</span></div><div class="tb-title">${esc(d.title)}</div>${progItems(d)}<a class="tb-more" href="#/program">Hele programmet →</a></aside>`;
+}
+function viewProgram() {
+  const P = C.program; if (!P) return '<p class="empty">Programmet er ikke trykket ennå.</p>';
+  const today = osloDate(), V = P.venue || {};
+  return `<div class="kicker">Offisielt program</div><h2 class="headline" style="font-size:34px">Programmet</h2>
+  <p class="intro">Seks dager, én villa i Marbella og et urovekkende antall padeltimer. Reisesjefen har lagt planen. Avisen tar ikke ansvar for avvik.</p>
+  ${P.days.map(d => `<section class="prog-day${d.date === today ? ' is-today' : ''}"><h3 class="prog-h"><span>${esc(fmtProgDay(d.date))}</span>${d.date === today ? '<em>I DAG</em>' : ''}</h3><div class="prog-sub">${esc(d.title)}</div>${progItems(d)}</section>`).join('')}
+  ${V.name ? `<section class="venue"><div class="kicker">Arenaen</div><h3 class="prog-h"><span>${esc(V.name)}</span></h3><div class="prog-sub">${esc(V.where || '')}</div><p>${esc(V.desc || '')}</p>${V.quip ? `<p class="pq">${esc(V.quip)}</p>` : ''}</section>` : ''}`;
 }
 function viewRooms() {
   return `<div class="kicker">Offisielt dokument</div><h2 class="headline" style="font-size:34px">Romfordelingen</h2>
@@ -401,7 +420,7 @@ function playReel(S) {
   const latest = [...S.arts].sort((a, b) => b.ts - a.ts)[0];
   const frames = [
     { cd: 3 }, { cd: 2 }, { cd: 1 },
-    { big: 'Ekstra! 15 nordmenn lander i La Quinta', small: 'Racketbager, solkrem og urokkelig selvtillit' },
+    { big: 'Ekstra! 15 nordmenn lander i Marbella', small: 'Racketbager, solkrem og urokkelig selvtillit' },
     { big: 'Lysnes og Grønneberg utropt til hovedroller', small: '– Selvutnevnt, bekrefter kilder' },
     { big: 'Snorkealarm i rom 6 og 7', small: 'Naboer bestiller ørepropper i bulk' },
     { big: 'Padelnivå: «Lovende»', small: 'ifølge deltakernes mødre' },
@@ -430,7 +449,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 7;
+const APP_VER = 8;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
