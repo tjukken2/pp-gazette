@@ -326,8 +326,8 @@ function hydrateSeedFilms() {
     el.dataset.vh = '1'; let f; try { f = JSON.parse(el.dataset.sfilm); } catch { return; }
     const key = 'sf:' + f.parts[0];
     if (vidEls.has(key)) { el.innerHTML = ''; vidEls.get(key).forEach(n => el.appendChild(n)); return; }
-    defaultImageUrl(f.poster).then(u => { const ph = el.querySelector('.vid-ph'); if (u && ph) { const img = new Image(); img.alt = ''; img.src = u; ph.replaceWith(img); } });
     const box = el.querySelector('.vid-poster'), st = el.querySelector('.vid-status');
+    defaultImageUrl(f.poster).then(u => { const ph = box.querySelector('.vid-ph'); if (u && ph) { const img = new Image(); img.alt = ''; img.src = u; ph.replaceWith(img); } });
     const dl = dlButton(prog => encFilmBlob(f.parts, f.mime, (d, n) => prog(Math.round(d / n * 100))), f.file);
     el.appendChild(dl); vidEls.set(key, [box, dl]);
     box.onclick = async () => {
@@ -692,7 +692,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 21;
+const APP_VER = 22;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
