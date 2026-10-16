@@ -202,3 +202,11 @@ table.results tr.win td{color:var(--red);font-weight:700}
 .vid-dl a{color:var(--red)}
 .vid-warn{font-style:italic}
 .vpic .vmeta{font-size:13px;margin-top:4px}
+
+/* Last ned filmen (v21) */
+.film-dl{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 8px;background:var(--paper2);font-size:13px;border-top:1px solid rgba(0,0,0,.12)}
+.film-dl-btn{font:inherit;font-weight:700;letter-spacing:.04em;color:var(--red);background:transparent;border:1px solid var(--red);border-radius:2px;padding:5px 12px;cursor:pointer;min-height:34px}
+.film-dl-btn:disabled{opacity:.6;cursor:progress}
+.film-dl-hint{color:#5a4a36;font-style:italic}
+.film-dl-hint a{color:var(--red)}
+.vid-dl .film-dl{padding:4px 0 0;background:none;border-top:0}

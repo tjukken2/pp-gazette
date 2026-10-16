@@ -251,9 +251,75 @@ function videoFig(v) {
   const meta = [v.dur ? Math.round(v.dur) + ' sek' : '', v.size ? fmtMB(v.size) : ''].filter(Boolean).join(' · ');
   return `<figure class="article-video inline"><div class="vid-box" data-video="${esc(JSON.stringify({ vid: v.vid, parts: v.parts, poster: v.poster || null, mime: v.mime || '', dur: v.dur || null }))}"><div class="vid-poster"><div class="vid-ph">🎬</div><button class="reel-play" type="button" aria-label="Spill av video">▶</button><div class="vid-status">${esc(meta)}</div></div></div>${v.caption ? `<figcaption class="caption">${esc(v.caption)}</figcaption>` : ''}</figure>`;
 }
+/* ---------- film download («Last ned filmen») ---------- */
+// Encrypted repo films (reel + seed films): decrypt once, keep the Blob; returns Promise<Blob>
+const filmBlobs = new Map();
+function encFilmBlob(parts, mime, onProg) {
+  const key = parts[0];
+  if (!filmBlobs.has(key)) {
+    let done = 0;
+    const pr = Promise.all(parts.map(async p => {
+      const r = await fetchFirst([p + '?v=' + APP_VER, REPO_RAW + p]); const t = (await r.text()).trim();
+      const raw = await decBytes(b64.dec(t.slice(3))); done++; onProg && onProg(done, parts.length); return raw;
+    })).then(bufs => new Blob(bufs, { type: mime || 'video/mp4' }));
+    filmBlobs.set(key, pr); pr.catch(() => filmBlobs.delete(key));
+  } else if (onProg) filmBlobs.get(key).then(() => onProg(parts.length, parts.length)).catch(() => {});
+  return filmBlobs.get(key);
+}
+const filmUrls = new Map();
+async function encFilmUrl(parts, mime, onProg) {
+  const key = parts[0];
+  if (!filmUrls.has(key)) filmUrls.set(key, encFilmBlob(parts, mime, onProg).then(b => URL.createObjectURL(b)).catch(e => { filmUrls.delete(key); throw e; }));
+  else if (onProg) onProg(parts.length, parts.length);
+  return filmUrls.get(key);
+}
+const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isMobile = () => isIOS() || /Android/i.test(navigator.userAgent);
+// getBlob: async () => Blob. Mobile: share sheet (Lagre video) – needs a fresh tap, so tap 1 fetches, tap 2 shares.
+function dlButton(getBlob, filename, label = 'Last ned filmen') {
+  const wrap = document.createElement('div'); wrap.className = 'film-dl';
+  wrap.innerHTML = `<button type="button" class="film-dl-btn">⬇ ${esc(label)}</button><span class="film-dl-hint" aria-live="polite"></span>`;
+  const btn = wrap.querySelector('button'), hint = wrap.querySelector('.film-dl-hint');
+  let blob = null, busy = false;
+  const deliver = async () => {
+    const type = blob.type || 'video/mp4';
+    if (isMobile()) {
+      let file = null; try { file = new File([blob], filename, { type }); } catch {}
+      if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: filename }); hint.textContent = ''; return; }
+        catch (e) {
+          if (e && e.name === 'AbortError') { hint.textContent = ''; return; }
+          if (e && e.name === 'NotAllowedError') { btn.textContent = '⬇ Trykk igjen for å lagre'; hint.textContent = 'Filmen er klar.'; return; }
+        }
+      }
+      const u = URL.createObjectURL(blob);
+      const w = window.open(u, '_blank');
+      hint.textContent = 'Trykk på del-ikonet og velg «Lagre video».';
+      if (!w) { const a = document.createElement('a'); a.href = u; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Åpne filmen'; hint.append(' ', a); }
+      return;
+    }
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = u; a.download = filename; a.style.display = 'none';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 60000);
+    hint.textContent = 'Lastet ned.';
+  };
+  btn.onclick = async () => {
+    if (busy) return;
+    if (blob) return deliver();
+    busy = true; btn.disabled = true; hint.textContent = 'Henter filmen…';
+    try {
+      blob = await getBlob(p => hint.textContent = `Henter filmen… ${p} %`);
+      btn.disabled = false; busy = false;
+      if (isMobile()) { btn.textContent = '⬇ Lagre filmen'; hint.textContent = 'Klar – trykk «Lagre filmen».'; }
+      else await deliver();
+    } catch (e) { busy = false; btn.disabled = false; hint.textContent = 'Klarte ikke å hente filmen. Prøv igjen.'; }
+  };
+  return wrap;
+}
 // Seed films (encrypted repo files like the reel): article.film = {poster, parts:[paths], mime, dur, caption}; body marker [[film]]
 function seedFilmFig(f) {
-  return `<figure class="article-video inline"><div class="vid-box" data-sfilm="${esc(JSON.stringify({ poster: f.poster, parts: f.parts, mime: f.mime || 'video/mp4' }))}"><div class="vid-poster"><div class="vid-ph">🎬</div><button class="reel-play" type="button" aria-label="Spill av film">▶</button><div class="vid-status">${f.dur ? esc(f.dur + ' sek') : ''}</div></div></div>${f.caption ? `<figcaption class="caption">▶ ${esc(f.caption)}</figcaption>` : ''}</figure>`;
+  return `<figure class="article-video inline"><div class="vid-box" data-sfilm="${esc(JSON.stringify({ poster: f.poster, parts: f.parts, mime: f.mime || 'video/mp4', file: f.file || 'padel-posten-film.mp4' }))}"><div class="vid-poster"><div class="vid-ph">🎬</div><button class="reel-play" type="button" aria-label="Spill av film">▶</button><div class="vid-status">${f.dur ? esc(f.dur + ' sek') : ''}</div></div></div>${f.caption ? `<figcaption class="caption">▶ ${esc(f.caption)}</figcaption>` : ''}</figure>`;
 }
 function hydrateSeedFilms() {
   document.querySelectorAll('[data-sfilm]:not([data-vh])').forEach(el => {
@@ -262,16 +328,16 @@ function hydrateSeedFilms() {
     if (vidEls.has(key)) { el.innerHTML = ''; vidEls.get(key).forEach(n => el.appendChild(n)); return; }
     defaultImageUrl(f.poster).then(u => { const ph = el.querySelector('.vid-ph'); if (u && ph) { const img = new Image(); img.alt = ''; img.src = u; ph.replaceWith(img); } });
     const box = el.querySelector('.vid-poster'), st = el.querySelector('.vid-status');
+    const dl = dlButton(prog => encFilmBlob(f.parts, f.mime, (d, n) => prog(Math.round(d / n * 100))), f.file);
+    el.appendChild(dl); vidEls.set(key, [box, dl]);
     box.onclick = async () => {
       if (el.dataset.loading) return; el.dataset.loading = '1';
       try {
-        if (!vidCache.has(key)) { const pr = (async () => { let done = 0; st.textContent = 'Henter filmen… 0 %';
-          const bufs = await Promise.all(f.parts.map(async p => { const r = await fetchFirst([p + '?v=' + APP_VER, REPO_RAW + p]); const t = (await r.text()).trim(); const raw = await decBytes(b64.dec(t.slice(3))); done++; st.textContent = `Henter filmen… ${Math.round(done / f.parts.length * 100)} %`; return raw; }));
-          return URL.createObjectURL(new Blob(bufs, { type: f.mime })); })(); vidCache.set(key, pr); pr.catch(() => vidCache.delete(key)); }
-        const u = await vidCache.get(key);
+        st.textContent = 'Henter filmen… 0 %';
+        const u = await encFilmUrl(f.parts, f.mime, (d, n) => st.textContent = `Henter filmen… ${Math.round(d / n * 100)} %`);
         const vd = document.createElement('video'); vd.controls = true; vd.playsInline = true; vd.setAttribute('playsinline', ''); vd.setAttribute('webkit-playsinline', ''); vd.preload = 'auto'; vd.src = u;
         const img = box.querySelector('img'); if (img) vd.poster = img.src;
-        el.innerHTML = ''; el.appendChild(vd); vidEls.set(key, [vd]);
+        box.replaceWith(vd); vidEls.set(key, [vd, dl]);
         vd.play().catch(() => {});
       } catch (e) { delete el.dataset.loading; st.textContent = 'Filmen kom ikke fram. Trykk for å prøve igjen.'; }
     };
@@ -292,7 +358,8 @@ function hydrateVideos() {
         const ext = /quicktime/.test(v.mime) ? 'mov' : 'mp4';
         const dl = document.createElement('div'); dl.className = 'vid-dl';
         const hevcRisk = /quicktime/.test(v.mime) && !vd.canPlayType('video/quicktime');
-        dl.innerHTML = `${hevcRisk ? '<span class="vid-warn">Nettleseren din kan kanskje ikke spille dette formatet. </span>' : ''}<a href="${u}" download="padel-posten-video.${ext}">Last ned videoen</a>`;
+        dl.innerHTML = `${hevcRisk ? '<span class="vid-warn">Nettleseren din kan kanskje ikke spille dette formatet. </span>' : ''}`;
+        dl.appendChild(dlButton(async () => (await fetch(u)).blob(), `padel-posten-video-${v.vid}.${ext}`, 'Last ned videoen'));
         vd.onerror = () => { const w = dl.querySelector('.vid-warn'); if (w) w.textContent = 'Nettleseren din kan ikke spille dette formatet (f.eks. HEVC fra iPhone i Chrome). '; else dl.insertAdjacentHTML('afterbegin', '<span class="vid-warn">Nettleseren din kan ikke spille dette formatet (f.eks. HEVC fra iPhone i Chrome). </span>'); };
         el.innerHTML = ''; el.appendChild(vd); el.appendChild(dl);
         vidEls.set(v.vid, [vd, dl]);
@@ -334,21 +401,17 @@ function reelVideo() {
   if (!R) { reelEl.hidden = true; return reelEl; }
   reelEl.innerHTML = `<div class="reel-poster"><img alt=""><button class="reel-play" aria-label="Spill av">▶</button><div class="reel-status"></div></div>`;
   defaultImageUrl(R.poster).then(u => { if (u) reelEl.querySelector('img').src = u; });
-  const st = reelEl.querySelector('.reel-status');
-  reelEl.querySelector('.reel-poster').onclick = async () => {
+  const poster = reelEl.querySelector('.reel-poster'), st = reelEl.querySelector('.reel-status');
+  reelEl.appendChild(dlButton(prog => encFilmBlob(R.parts, 'video/mp4', (d, n) => prog(Math.round(d / n * 100))), R.file || 'padel-posten-filmavisen.mp4'));
+  poster.onclick = async () => {
     if (reelEl.dataset.loading) return; reelEl.dataset.loading = '1';
-    let done = 0; st.textContent = 'Henter filmen fra trykkeriet… 0 %';
+    st.textContent = 'Henter filmen fra trykkeriet… 0 %';
     try {
-      const bufs = await Promise.all(R.parts.map(async p => {
-        const r = await fetchFirst([p, REPO_RAW + p]); const t = (await r.text()).trim();
-        const raw = await decBytes(b64.dec(t.slice(3)));
-        done++; st.textContent = `Henter filmen fra trykkeriet… ${Math.round(done / R.parts.length * 100)} %`; return raw;
-      }));
+      const u = await encFilmUrl(R.parts, 'video/mp4', (d, n) => st.textContent = `Henter filmen fra trykkeriet… ${Math.round(d / n * 100)} %`);
       const v = document.createElement('video');
       v.controls = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
-      v.poster = reelEl.querySelector('img').src; v.preload = 'auto';
-      v.src = URL.createObjectURL(new Blob(bufs, { type: 'video/mp4' }));
-      reelEl.innerHTML = ''; reelEl.appendChild(v);
+      v.poster = poster.querySelector('img').src; v.preload = 'auto'; v.src = u;
+      poster.replaceWith(v);
       v.play().catch(() => {});
     } catch (e) { delete reelEl.dataset.loading; st.textContent = 'Filmen kom ikke fram. Trykk for å prøve igjen.'; }
   };
@@ -629,7 +692,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 20;
+const APP_VER = 21;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
