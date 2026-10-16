@@ -163,6 +163,118 @@ async function compress(file, maxSide) {
   return await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.82));
 }
 
+/* ---------- video (v17) ----------
+   ntfy.sh anonymous limits (checked 2026-10-17 via /v1/account): 2 MB per attachment, 20 MB stored per IP for 3 h,
+   250 messages/day. Videos are split into encrypted chunks (< per-file limit), each its own ntfy message
+   {t:'vchunk', vid, i, n}; the article carries videos:[{vid, parts:[eventIds], poster, mime, dur, w, h, size}]. */
+const VID_MAX = 15 * 1024 * 1024, VID_MAX_S = 60;
+const vidCache = new Map(); // vid -> Promise<objectURL>
+const vidEls = new Map();   // vid -> [video, link] kept across re-renders so playback isn't interrupted
+const fmtMB = b => (b / 1048576).toFixed(b < 10485760 ? 1 : 0).replace('.', ',') + ' MB';
+const vidMime = f => f.type || (/\.mov$/i.test(f.name) ? 'video/quicktime' : 'video/mp4');
+async function ntfyLimits() {
+  try { const j = await (await fetch(`${NTFY}/v1/account`, { cache: 'no-store' })).json();
+    return { file: j.limits.attachment_file_size, left: j.stats.attachment_total_size_remaining, msgs: j.stats.messages_remaining };
+  } catch { return { file: 2097152, left: null, msgs: null }; }
+}
+function probeVideo(file) {
+  return new Promise(res => {
+    const out = { dur: null, w: 0, h: 0, poster: null }; let done = false;
+    const v = document.createElement('video'); const url = URL.createObjectURL(file);
+    const fin = () => { if (done) return; done = true; clearTimeout(t); v.removeAttribute('src'); v.load(); URL.revokeObjectURL(url); res(out); };
+    const t = setTimeout(fin, 9000);
+    v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto';
+    v.onloadedmetadata = () => { out.dur = isFinite(v.duration) ? v.duration : null; out.w = v.videoWidth; out.h = v.videoHeight; try { v.currentTime = Math.min(0.6, (out.dur || 1) / 2); } catch { fin(); } };
+    v.onseeked = () => setTimeout(() => { try {
+      const sc = Math.min(1, 960 / Math.max(v.videoWidth, v.videoHeight || 1)); const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(v.videoWidth * sc)); cv.height = Math.max(1, Math.round(v.videoHeight * sc));
+      cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height);
+      const sm = document.createElement('canvas'); sm.width = 16; sm.height = 12; const sx = sm.getContext('2d'); sx.drawImage(cv, 0, 0, 16, 12);
+      const px = sx.getImageData(0, 0, 16, 12).data; let lum = 0; for (let k = 0; k < px.length; k += 4) lum += px[k] + px[k + 1] + px[k + 2];
+      if (lum / (px.length / 4) / 3 < 4) { fin(); return; } // blank frame (decoder couldn't paint) – skip poster
+      cv.toBlob(b => { out.poster = b && b.size > 2000 ? b : null; fin(); }, 'image/jpeg', 0.8);
+    } catch { fin(); } }, 250);
+    v.onerror = fin; v.src = url; v.load();
+  });
+}
+function videoProblem(file, info) {
+  if (file.size > VID_MAX) return `Videoen er for stor (${fmtMB(file.size)}). Maks ${fmtMB(VID_MAX)} – trim klippet i Bilder-appen (Rediger → dra i kantene) eller ta opp kortere.`;
+  if (info.dur && info.dur > VID_MAX_S + 0.5) return `Videoen er for lang (${Math.round(info.dur)} sek). Maks ${VID_MAX_S} sekunder – trim den i Bilder-appen først.`;
+  return '';
+}
+async function putEnc(bytes, meta, fname) {
+  const ms = await encStr(meta);
+  const r = await fetch(`${NTFY}/${TOPIC}?filename=${fname}&message=${encodeURIComponent(ms)}`, { method: 'PUT', body: new Blob([bytes]) });
+  if (r.status === 413) throw new Error('Trykkeriet sier filen er for stor (ntfy-grense). Prøv et kortere klipp.');
+  if (r.status === 429) throw new Error('Trykkeriet har nådd kvoten for dette nettverket. Vent noen timer eller prøv på mobildata.');
+  if (!r.ok) throw new Error('Opplasting feilet (' + r.status + ')');
+  const m = await r.json(); const e = fromNtfy(m); if (e) { addEvent(e); decoded.set(e.id, meta); }
+  return m.id;
+}
+async function publishVideo(file, info, aid, prog) {
+  const why = videoProblem(file, info); if (why) throw new Error(why);
+  const lim = await ntfyLimits();
+  const need = file.size + (info.poster ? info.poster.size : 0) + 4096;
+  if (lim.left != null && need > lim.left) throw new Error(`Trykkeriet har bare ${fmtMB(Math.max(0, lim.left))} ledig for nettverket ditt de neste timene (videoen trenger ${fmtMB(need)}). Prøv på mobildata (skru av Wi-Fi) eller vent et par timer.`);
+  const CH = Math.max(262144, Math.min(1900000, (lim.file || 2097152) - 131072));
+  const n = Math.ceil(file.size / CH);
+  if (lim.msgs != null && n + 3 > lim.msgs) throw new Error('Trykkeriet har nådd dagens meldingskvote for nettverket ditt. Prøv på mobildata.');
+  const vid = 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const parts = [];
+  for (let i = 0; i < n; i++) {
+    prog(`Laster opp video: del ${i + 1} av ${n}…`);
+    const raw = new Uint8Array(await file.slice(i * CH, (i + 1) * CH).arrayBuffer());
+    parts.push(await putEnc(await encBytes(raw), { t: 'vchunk', vid, i, n, by: clientId }, 'v.bin'));
+  }
+  let poster = null;
+  if (info.poster) { prog('Laster opp plakatbilde…'); const pm = { t: 'photo', target: 'vid:' + vid, mime: 'image/jpeg', by: clientId };
+    poster = await putEnc(await encBytes(new Uint8Array(await info.poster.arrayBuffer())), pm, 'p.bin'); blobCache.set(poster, Promise.resolve(URL.createObjectURL(info.poster))); }
+  vidCache.set(vid, Promise.resolve(URL.createObjectURL(new Blob([file], { type: vidMime(file) }))));
+  return { vid, parts, poster, mime: vidMime(file), dur: info.dur ? Math.round(info.dur * 10) / 10 : null, w: info.w, h: info.h, size: file.size };
+}
+function videoUrl(v, prog) {
+  if (vidCache.has(v.vid)) return vidCache.get(v.vid);
+  const pr = (async () => {
+    const out = [];
+    for (let i = 0; i < v.parts.length; i++) {
+      const e = events.get(v.parts[i]); if (!e) throw new Error('missing');
+      prog && prog(i + 1, v.parts.length);
+      out.push(await decBytes(await evBytes(e)));
+    }
+    return URL.createObjectURL(new Blob(out, { type: v.mime || 'video/mp4' }));
+  })();
+  vidCache.set(v.vid, pr); pr.catch(() => vidCache.delete(v.vid)); return pr;
+}
+const okVideo = v => v && typeof v.vid === 'string' && Array.isArray(v.parts) && v.parts.length && v.parts.length <= 64 && v.parts.every(p => typeof p === 'string');
+function videoFig(v) {
+  const meta = [v.dur ? Math.round(v.dur) + ' sek' : '', v.size ? fmtMB(v.size) : ''].filter(Boolean).join(' · ');
+  return `<figure class="article-video inline"><div class="vid-box" data-video="${esc(JSON.stringify({ vid: v.vid, parts: v.parts, poster: v.poster || null, mime: v.mime || '', dur: v.dur || null }))}"><div class="vid-poster"><div class="vid-ph">🎬</div><button class="reel-play" type="button" aria-label="Spill av video">▶</button><div class="vid-status">${esc(meta)}</div></div></div>${v.caption ? `<figcaption class="caption">${esc(v.caption)}</figcaption>` : ''}</figure>`;
+}
+function hydrateVideos() {
+  document.querySelectorAll('[data-video]:not([data-vh])').forEach(async el => {
+    el.dataset.vh = '1'; let v; try { v = JSON.parse(el.dataset.video); } catch { return; }
+    if (vidEls.has(v.vid)) { el.innerHTML = ''; vidEls.get(v.vid).forEach(n => el.appendChild(n)); return; }
+    if (v.poster) imageUrl(v.poster).then(u => { const ph = el.querySelector('.vid-ph'); if (u && ph) { const img = new Image(); img.alt = ''; img.src = u; ph.replaceWith(img); } });
+    const box = el.querySelector('.vid-poster'), st = el.querySelector('.vid-status');
+    box.onclick = async () => {
+      if (el.dataset.loading) return; el.dataset.loading = '1';
+      try {
+        const u = await videoUrl(v, (i, n) => st.textContent = `Henter video… ${i}/${n}`);
+        const vd = document.createElement('video'); vd.controls = true; vd.playsInline = true; vd.setAttribute('playsinline', ''); vd.preload = 'metadata'; vd.src = u;
+        const img = box.querySelector('img'); if (img) vd.poster = img.src;
+        const ext = /quicktime/.test(v.mime) ? 'mov' : 'mp4';
+        const dl = document.createElement('div'); dl.className = 'vid-dl';
+        const hevcRisk = /quicktime/.test(v.mime) && !vd.canPlayType('video/quicktime');
+        dl.innerHTML = `${hevcRisk ? '<span class="vid-warn">Nettleseren din kan kanskje ikke spille dette formatet. </span>' : ''}<a href="${u}" download="padel-posten-video.${ext}">Last ned videoen</a>`;
+        vd.onerror = () => { const w = dl.querySelector('.vid-warn'); if (w) w.textContent = 'Nettleseren din kan ikke spille dette formatet (f.eks. HEVC fra iPhone i Chrome). '; else dl.insertAdjacentHTML('afterbegin', '<span class="vid-warn">Nettleseren din kan ikke spille dette formatet (f.eks. HEVC fra iPhone i Chrome). </span>'); };
+        el.innerHTML = ''; el.appendChild(vd); el.appendChild(dl);
+        vidEls.set(v.vid, [vd, dl]);
+        vd.play().catch(() => {});
+      } catch (e) { delete el.dataset.loading; st.textContent = e.message === 'missing' ? 'Videoen er på vei fra trykkeriet… prøv igjen om litt.' : 'Videoen kom ikke fram. Trykk for å prøve igjen.'; }
+    };
+  });
+}
+
 /* ---------- views ---------- */
 function setActive(h) { document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === h)); }
 function render() {
@@ -218,8 +330,9 @@ function reelVideo() {
 function userParas(a) {
   const ps = esc(a.body).split(/\n\s*\n|\n/).filter(p => p.trim() && !/^\[\[.*\]\]$/.test(p.trim())).map(p => `<p>${p}</p>`);
   const ex = Array.isArray(a.photos) ? a.photos.filter(x => x && typeof x.id === 'string').slice(0, 8) : [];
+  if (Array.isArray(a.videos)) ex.push(...a.videos.filter(okVideo).slice(0, 2).map(v => ({ ...v, isVideo: true })));
   if (!ex.length) return ps.join('');
-  const fig = x => `<figure class="article-photo inline"><div class="halftone" data-img="${esc(x.id)}"><div class="initials">⌛</div></div>${x.caption ? `<figcaption class="caption">${esc(x.caption)}</figcaption>` : ''}</figure>`;
+  const fig = x => x.isVideo ? videoFig(x) : `<figure class="article-photo inline"><div class="halftone" data-img="${esc(x.id)}"><div class="initials">⌛</div></div>${x.caption ? `<figcaption class="caption">${esc(x.caption)}</figcaption>` : ''}</figure>`;
   const out = []; let k = 0;
   ps.forEach((p, i) => { out.push(p); while (k < ex.length && (i + 1) >= Math.ceil((k + 1) * ps.length / (ex.length + 1))) out.push(fig(ex[k++])); });
   while (k < ex.length) out.push(fig(ex[k++]));
@@ -372,6 +485,9 @@ function viewWrite() {
     <label for="f-p">Bilder (valgfritt, opptil 8 – første blir hovedbilde)</label><input id="f-p" type="file" accept="image/*" multiple>
     <div id="f-pics" class="pics"></div>
     <p class="hint">Velg flere bilder på en gang, eller trykk igjen for å legge til flere. Skriv en bildetekst under hvert bilde.</p>
+    <label for="f-v">Video (valgfritt, ett klipp – maks 60 sek og 15 MB)</label><input id="f-v" type="file" accept="video/*,.mov,.mp4">
+    <div id="f-vid"></div>
+    <p class="hint">Korte klipp fungerer best. For stort? Trim klippet i Bilder-appen (Rediger) først. På hotell-Wi-Fi deler alle en felles kvote – bruk gjerne mobildata.</p>
     <label for="f-a">Byline</label><input id="f-a" list="guylist" maxlength="60" value="${esc(last)}" placeholder="Ditt navn eller «Anonym kilde»">
     <datalist id="guylist">${C.guys.map(g => `<option value="${esc(g.name)}">`).join('')}<option value="Anonym kilde"></datalist>
     <label for="f-d">Utgave (dato)</label><input id="f-d" type="date" value="${today}">
@@ -385,6 +501,17 @@ function bindWrite() {
     box.innerHTML = pics.map((x, k) => `<div class="pic"><img src="${x.url}" alt=""><button type="button" class="pic-x" data-k="${k}" aria-label="Fjern">✕</button><input data-c="${k}" maxlength="160" value="${esc(x.caption)}" placeholder="${k ? 'Bildetekst' : 'Bildetekst (hovedbilde)'}"></div>`).join('');
     box.querySelectorAll('[data-c]').forEach(i => i.oninput = () => pics[+i.dataset.c].caption = i.value);
     box.querySelectorAll('.pic-x').forEach(b => b.onclick = () => { pics.splice(+b.dataset.k, 1); draw(); });
+  };
+  const vIn = $('#f-v'), vBox = $('#f-vid'); let vid = null;
+  const drawV = () => { vBox.innerHTML = vid ? `<div class="pic vpic">${vid.posterUrl ? `<img src="${vid.posterUrl}" alt="">` : '<div class="vid-ph small">🎬</div>'}<div class="vmeta">🎬 ${esc(vid.file.name || 'video')} · ${vid.info.dur ? Math.round(vid.info.dur) + ' sek · ' : ''}${fmtMB(vid.file.size)}</div><button type="button" class="pic-x" id="f-vx" aria-label="Fjern">✕</button><input id="f-vc" maxlength="160" value="${esc(vid.caption)}" placeholder="Videotekst"></div>` : '';
+    if (vid) { $('#f-vc').oninput = e => vid.caption = e.target.value; $('#f-vx').onclick = () => { vid = null; drawV(); }; } };
+  vIn.onchange = async () => {
+    const f = vIn.files[0]; vIn.value = ''; if (!f) return;
+    if (f.size > VID_MAX) { vid = null; drawV(); toast(videoProblem(f, {}), 6000); return; }
+    vBox.innerHTML = '<p class="hint">Sjekker videoen…</p>';
+    const info = await probeVideo(f); const why = videoProblem(f, info);
+    if (why) { vid = null; drawV(); toast(why, 6000); return; }
+    vid = { file: f, info, caption: '', posterUrl: info.poster ? URL.createObjectURL(info.poster) : null }; drawV();
   };
   p.onchange = () => { for (const f of p.files) if (pics.length < 8) pics.push({ file: f, url: URL.createObjectURL(f), caption: '' }); p.value = ''; draw(); };
   $('#write-form').onsubmit = async ev => {
@@ -401,6 +528,7 @@ function bindWrite() {
         up.push({ id: await publishPhoto(pics[k].file, 'art:' + a.aid, 1400), caption: pics[k].caption.trim() });
       }
       if (up.length) { a.photo = up[0].id; a.caption = up[0].caption; if (up.length > 1) a.photos = up.slice(1); }
+      if (vid) { const vm = await publishVideo(vid.file, vid.info, a.aid, t => go.textContent = t); vm.caption = vid.caption.trim(); a.videos = [vm]; }
       go.textContent = 'Trykker…';
       await publish(a);
       toast('Stopp pressen! Saken er trykket.');
@@ -426,6 +554,7 @@ async function defaultImageUrl(path) {
   blobCache.set(path, pr); return pr;
 }
 function hydrateImages() {
+  hydrateVideos();
   document.querySelectorAll('[data-defimg]').forEach(async el => {
     const u = (await defaultImageUrl(el.dataset.defimg)) || el.dataset.hot || null;
     if (u && el.isConnected) { const img = new Image(); img.alt = ''; img.src = u; el.innerHTML = ''; el.appendChild(img); }
@@ -472,7 +601,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 16;
+const APP_VER = 17;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;

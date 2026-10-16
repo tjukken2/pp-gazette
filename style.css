@@ -189,3 +189,16 @@ table.results .rr{font-size:12px;color:var(--ink2);letter-spacing:.02em}
 table.results .rs{font-weight:700}
 table.results tr.win td{color:var(--red);font-weight:700}
 .rb-notes{margin:8px 0 0;padding-left:18px;font-style:italic;font-size:14px;color:var(--ink2)}
+.article-video{margin:14px 0;clear:both}
+.vid-box{position:relative;background:#1d1912;border:1px solid var(--rule)}
+.vid-box video{display:block;width:100%;max-height:75vh;background:#000}
+.vid-poster{position:relative;cursor:pointer;min-height:180px;display:flex;align-items:center;justify-content:center}
+.vid-poster img{display:block;width:100%;max-height:75vh;object-fit:cover}
+.vid-ph{font-size:48px;padding:50px 0;color:#efe4c8}
+.vid-ph.small{font-size:30px;padding:24px 0;text-align:center;background:#1d1912}
+.vid-poster .reel-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+.vid-status{position:absolute;left:0;right:0;bottom:0;padding:4px 8px;font-size:12px;color:#f6ecd2;background:linear-gradient(transparent,rgba(0,0,0,.7));text-align:right}
+.vid-dl{font-size:13px;padding:4px 6px;background:var(--paper2)}
+.vid-dl a{color:var(--red)}
+.vid-warn{font-style:italic}
+.vpic .vmeta{font-size:13px;margin-top:4px}
