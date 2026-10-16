@@ -119,6 +119,7 @@ function state() {
   for (const s of C.seed) articles.set(s.aid, { ...s, seed: true, ts: Date.parse(s.time || (s.date + 'T08:00:00Z')) / 1000 });
   for (const e of list) {
     const p = decoded.get(e.id); if (!p) continue;
+    if (p.t === 'article' && Array.isArray(C.hidden) && C.hidden.includes(p.aid)) continue;
     if (p.t === 'article' && p.aid && p.headline) articles.set(p.aid, { ...p, ts: e.time, eid: e.id });
     else if (p.t === 'del') dels.push(p);
     else if (p.t === 'vote' && guyById(p.guy) && p.c >= 0 && p.c < 4) { (votes[p.guy] ||= {})[p.voter] = p.c; }
@@ -250,6 +251,32 @@ function videoFig(v) {
   const meta = [v.dur ? Math.round(v.dur) + ' sek' : '', v.size ? fmtMB(v.size) : ''].filter(Boolean).join(' · ');
   return `<figure class="article-video inline"><div class="vid-box" data-video="${esc(JSON.stringify({ vid: v.vid, parts: v.parts, poster: v.poster || null, mime: v.mime || '', dur: v.dur || null }))}"><div class="vid-poster"><div class="vid-ph">🎬</div><button class="reel-play" type="button" aria-label="Spill av video">▶</button><div class="vid-status">${esc(meta)}</div></div></div>${v.caption ? `<figcaption class="caption">${esc(v.caption)}</figcaption>` : ''}</figure>`;
 }
+// Seed films (encrypted repo files like the reel): article.film = {poster, parts:[paths], mime, dur, caption}; body marker [[film]]
+function seedFilmFig(f) {
+  return `<figure class="article-video inline"><div class="vid-box" data-sfilm="${esc(JSON.stringify({ poster: f.poster, parts: f.parts, mime: f.mime || 'video/mp4' }))}"><div class="vid-poster"><div class="vid-ph">🎬</div><button class="reel-play" type="button" aria-label="Spill av film">▶</button><div class="vid-status">${f.dur ? esc(f.dur + ' sek') : ''}</div></div></div>${f.caption ? `<figcaption class="caption">▶ ${esc(f.caption)}</figcaption>` : ''}</figure>`;
+}
+function hydrateSeedFilms() {
+  document.querySelectorAll('[data-sfilm]:not([data-vh])').forEach(el => {
+    el.dataset.vh = '1'; let f; try { f = JSON.parse(el.dataset.sfilm); } catch { return; }
+    const key = 'sf:' + f.parts[0];
+    if (vidEls.has(key)) { el.innerHTML = ''; vidEls.get(key).forEach(n => el.appendChild(n)); return; }
+    defaultImageUrl(f.poster).then(u => { const ph = el.querySelector('.vid-ph'); if (u && ph) { const img = new Image(); img.alt = ''; img.src = u; ph.replaceWith(img); } });
+    const box = el.querySelector('.vid-poster'), st = el.querySelector('.vid-status');
+    box.onclick = async () => {
+      if (el.dataset.loading) return; el.dataset.loading = '1';
+      try {
+        if (!vidCache.has(key)) { const pr = (async () => { let done = 0; st.textContent = 'Henter filmen… 0 %';
+          const bufs = await Promise.all(f.parts.map(async p => { const r = await fetchFirst([p + '?v=' + APP_VER, REPO_RAW + p]); const t = (await r.text()).trim(); const raw = await decBytes(b64.dec(t.slice(3))); done++; st.textContent = `Henter filmen… ${Math.round(done / f.parts.length * 100)} %`; return raw; }));
+          return URL.createObjectURL(new Blob(bufs, { type: f.mime })); })(); vidCache.set(key, pr); pr.catch(() => vidCache.delete(key)); }
+        const u = await vidCache.get(key);
+        const vd = document.createElement('video'); vd.controls = true; vd.playsInline = true; vd.setAttribute('playsinline', ''); vd.setAttribute('webkit-playsinline', ''); vd.preload = 'auto'; vd.src = u;
+        const img = box.querySelector('img'); if (img) vd.poster = img.src;
+        el.innerHTML = ''; el.appendChild(vd); vidEls.set(key, [vd]);
+        vd.play().catch(() => {});
+      } catch (e) { delete el.dataset.loading; st.textContent = 'Filmen kom ikke fram. Trykk for å prøve igjen.'; }
+    };
+  });
+}
 function hydrateVideos() {
   document.querySelectorAll('[data-video]:not([data-vh])').forEach(async el => {
     el.dataset.vh = '1'; let v; try { v = JSON.parse(el.dataset.video); } catch { return; }
@@ -342,6 +369,7 @@ function richParas(a) {
   return (a.rich || a.body).split(/\n\s*\n|\n/).filter(p => p.trim()).map(p => {
     const m = p.match(/^\[\[bilde:(\d+)\]\]$/);
     if (m) { const x = (a.extra || [])[+m[1] - 1]; return x ? `<figure class="article-photo inline"><div class="halftone" data-defimg="${esc(x.photo)}"><div class="initials">⌛</div></div>${x.caption ? `<figcaption class="caption">${esc(x.caption)}</figcaption>` : ''}</figure>` : ''; }
+    if (p.trim() === '[[film]]' && a.film && Array.isArray(a.film.parts)) return seedFilmFig(a.film);
     if (/^\[\[.*\]\]$/.test(p.trim())) return '';
     if (p.startsWith('## ')) return `<h4 class="mellomtittel">${esc(p.slice(3))}</h4>`;
     return `<p>${esc(p)}</p>`;
@@ -554,7 +582,7 @@ async function defaultImageUrl(path) {
   blobCache.set(path, pr); return pr;
 }
 function hydrateImages() {
-  hydrateVideos();
+  hydrateVideos(); hydrateSeedFilms();
   document.querySelectorAll('[data-defimg]').forEach(async el => {
     const u = (await defaultImageUrl(el.dataset.defimg)) || el.dataset.hot || null;
     if (u && el.isConnected) { const img = new Image(); img.alt = ''; img.src = u; el.innerHTML = ''; el.appendChild(img); }
@@ -601,7 +629,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 17;
+const APP_VER = 18;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
