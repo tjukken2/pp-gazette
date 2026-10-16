@@ -250,6 +250,14 @@ function articleHtml(a, lead) {
 function quoteBox(date) {
   return ((C && C.quotes) || []).filter(q => q.date === date).map(q => `<aside class="quote-box"><div class="qb-head">DAGENS SITAT</div><blockquote class="qb-quote">«${esc(q.quote)}»</blockquote>${q.by ? `<div class="qb-by">– ${esc(q.by)}</div>` : ''}${q.quip ? `<div class="qb-quip">${esc(q.quip)}</div>` : ''}</aside>`).join('');
 }
+// RESULTATER: content.results = [{date, title, rows:[{name, rounds:[..], total, poeng}], notes:[..]}] – sorted by total, ties share rank
+function resultsBox(date) {
+  return ((C && C.results) || []).filter(r => r.date === date).map(r => {
+    const rows = [...r.rows].map(x => ({ ...x, total: x.total ?? (x.rounds || []).reduce((a, b) => a + b, 0) })).sort((a, b) => b.total - a.total);
+    let rank = 0; rows.forEach((x, i) => { if (i === 0 || x.total !== rows[i - 1].total) rank = i + 1; x.rank = rank; });
+    return `<aside class="results-box"><div class="rb-head">${esc(r.title || 'RESULTATER')}</div><table class="results"><thead><tr><th>#</th><th>Navn</th><th>Runder</th><th>Sum</th><th>Poeng</th></tr></thead><tbody>${rows.map(x => `<tr${x.rank === 1 ? ' class="win"' : ''}><td>${x.rank}</td><td>${esc(x.name)}</td><td class="rr">${esc((x.rounds || []).join('·'))}</td><td class="rs">${x.total}</td><td>${x.poeng ?? ''}</td></tr>`).join('')}</tbody></table>${(r.notes || []).length ? `<ul class="rb-notes">${r.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}</aside>`;
+  }).join('');
+}
 function viewEdition(S, date, front) {
   const arts = S.arts.filter(a => a.date === date);
   const dates = [...new Set(S.arts.map(a => a.date))];
@@ -258,11 +266,11 @@ function viewEdition(S, date, front) {
   let html = `<div class="kicker" style="text-align:center">${esc(edLabel(date))} · ${esc(fmtDate(date))}</div>`;
   if (front) html += `<figure class="reel-video"><div id="reel-slot"></div><figcaption class="caption">▶ ${esc((C.reel && C.reel.label) || 'Dagens nyhetsinnslag')}</figcaption></figure>`;
   if (front) html += todayBox();
-  if (!arts.length) html += quoteBox(date);
+  if (!arts.length) html += quoteBox(date) + resultsBox(date);
   if (!arts.length) html += `<p class="empty">Ingen saker i denne utgaven ennå. Redaksjonen sover. <a href="#/skriv">Skriv den første!</a></p>`;
   else {
     html += articleHtml(arts[0], true);
-    html += quoteBox(date);
+    html += quoteBox(date) + resultsBox(date);
     if (arts.length > 1) html += `<div class="secondary-grid">${arts.slice(1).map(a => articleHtml(a, false)).join('')}</div>`;
   }
   html += `<div class="rule-double"></div><div class="btn-row">
@@ -464,7 +472,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 15;
+const APP_VER = 16;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
