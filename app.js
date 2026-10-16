@@ -116,7 +116,7 @@ async function imageUrl(id) {
 function state() {
   const list = [...events.values()].sort((a, b) => a.time - b.time || (a.id < b.id ? -1 : 1));
   const articles = new Map(), dels = [], votes = {}, photos = {};
-  for (const s of C.seed) articles.set(s.aid, { ...s, seed: true, ts: Date.parse(s.date + 'T08:00:00Z') / 1000 });
+  for (const s of C.seed) articles.set(s.aid, { ...s, seed: true, ts: Date.parse(s.time || (s.date + 'T08:00:00Z')) / 1000 });
   for (const e of list) {
     const p = decoded.get(e.id); if (!p) continue;
     if (p.t === 'article' && p.aid && p.headline) articles.set(p.aid, { ...p, ts: e.time, eid: e.id });
@@ -193,7 +193,7 @@ function articleHtml(a, lead) {
     <${lead ? 'h2' : 'h3'} class="headline">${esc(a.headline)}</${lead ? 'h2' : 'h3'}>
     ${a.sub ? `<p class="deck">${esc(a.sub)}</p>` : ''}
     <div class="byline"><span>Av ${esc(a.author || 'Anonym kilde')}</span><span>${esc(fmtDate(a.date).replace(/^\w+ /, ''))}</span></div>
-    ${a.photo ? `<figure class="article-photo"><div class="halftone" data-img="${esc(a.photo)}"><div class="initials">⌛</div></div>${a.caption ? `<figcaption class="caption">${esc(a.caption)}</figcaption>` : ''}</figure>` : ''}
+    ${a.photo || a.defphoto ? `<figure class="article-photo"><div class="halftone" ${a.photo ? `data-img="${esc(a.photo)}"` : `data-defimg="${esc(a.defphoto)}"`}><div class="initials">⌛</div></div>${a.caption ? `<figcaption class="caption">${esc(a.caption)}</figcaption>` : ''}</figure>` : ''}
     <div class="body">${paras(a.body)}</div>
     ${own ? `<button class="del" data-del="${esc(a.aid)}">Trekk tilbake saken</button>` : ''}
   </article>`;
