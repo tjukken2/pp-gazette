@@ -246,6 +246,10 @@ function articleHtml(a, lead) {
     ${own ? `<button class="del" data-del="${esc(a.aid)}">Trekk tilbake saken</button>` : ''}
   </article>`;
 }
+// DAGENS SITAT: content.quotes = [{date, quote, by, quip}] – shown in that date's edition (and on the front page while it is the latest edition)
+function quoteBox(date) {
+  return ((C && C.quotes) || []).filter(q => q.date === date).map(q => `<aside class="quote-box"><div class="qb-head">DAGENS SITAT</div><blockquote class="qb-quote">«${esc(q.quote)}»</blockquote>${q.by ? `<div class="qb-by">– ${esc(q.by)}</div>` : ''}${q.quip ? `<div class="qb-quip">${esc(q.quip)}</div>` : ''}</aside>`).join('');
+}
 function viewEdition(S, date, front) {
   const arts = S.arts.filter(a => a.date === date);
   const dates = [...new Set(S.arts.map(a => a.date))];
@@ -254,9 +258,11 @@ function viewEdition(S, date, front) {
   let html = `<div class="kicker" style="text-align:center">${esc(edLabel(date))} · ${esc(fmtDate(date))}</div>`;
   if (front) html += `<figure class="reel-video"><div id="reel-slot"></div><figcaption class="caption">▶ ${esc((C.reel && C.reel.label) || 'Dagens nyhetsinnslag')}</figcaption></figure>`;
   if (front) html += todayBox();
+  if (!arts.length) html += quoteBox(date);
   if (!arts.length) html += `<p class="empty">Ingen saker i denne utgaven ennå. Redaksjonen sover. <a href="#/skriv">Skriv den første!</a></p>`;
   else {
     html += articleHtml(arts[0], true);
+    html += quoteBox(date);
     if (arts.length > 1) html += `<div class="secondary-grid">${arts.slice(1).map(a => articleHtml(a, false)).join('')}</div>`;
   }
   html += `<div class="rule-double"></div><div class="btn-row">
@@ -458,7 +464,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 14;
+const APP_VER = 15;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
