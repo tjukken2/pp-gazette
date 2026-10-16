@@ -210,3 +210,5 @@ table.results tr.win td{color:var(--red);font-weight:700}
 .film-dl-hint{color:#5a4a36;font-style:italic}
 .film-dl-hint a{color:var(--red)}
 .vid-dl .film-dl{padding:4px 0 0;background:none;border-top:0}
+.film-dl-desc{font-weight:700;color:#2a2117}
+.film-dl-hint:empty{display:none}

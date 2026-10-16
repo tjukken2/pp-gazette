@@ -276,9 +276,9 @@ async function encFilmUrl(parts, mime, onProg) {
 const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isMobile = () => isIOS() || /Android/i.test(navigator.userAgent);
 // getBlob: async () => Blob. Mobile: share sheet (Lagre video) – needs a fresh tap, so tap 1 fetches, tap 2 shares.
-function dlButton(getBlob, filename, label = 'Last ned filmen') {
+function dlButton(getBlob, filename, label = 'Last ned filmen', desc = '') {
   const wrap = document.createElement('div'); wrap.className = 'film-dl';
-  wrap.innerHTML = `<button type="button" class="film-dl-btn">⬇ ${esc(label)}</button><span class="film-dl-hint" aria-live="polite"></span>`;
+  wrap.innerHTML = `<button type="button" class="film-dl-btn">⬇ ${esc(label)}</button>${desc ? `<span class="film-dl-desc">${esc(desc)}</span>` : ''}<span class="film-dl-hint" aria-live="polite"></span>`;
   const btn = wrap.querySelector('button'), hint = wrap.querySelector('.film-dl-hint');
   let blob = null, busy = false;
   const deliver = async () => {
@@ -319,7 +319,7 @@ function dlButton(getBlob, filename, label = 'Last ned filmen') {
 }
 // Seed films (encrypted repo files like the reel): article.film = {poster, parts:[paths], mime, dur, caption}; body marker [[film]]
 function seedFilmFig(f) {
-  return `<figure class="article-video inline"><div class="vid-box" data-sfilm="${esc(JSON.stringify({ poster: f.poster, parts: f.parts, mime: f.mime || 'video/mp4', file: f.file || 'padel-posten-film.mp4' }))}"><div class="vid-poster"><div class="vid-ph">🎬</div><button class="reel-play" type="button" aria-label="Spill av film">▶</button><div class="vid-status">${f.dur ? esc(f.dur + ' sek') : ''}</div></div></div>${f.caption ? `<figcaption class="caption">▶ ${esc(f.caption)}</figcaption>` : ''}</figure>`;
+  return `<figure class="article-video inline"><div class="vid-box" data-sfilm="${esc(JSON.stringify({ poster: f.poster, parts: f.parts, mime: f.mime || 'video/mp4', file: f.file || 'padel-posten-film.mp4', desc: f.dl || '' }))}"><div class="vid-poster"><div class="vid-ph">🎬</div><button class="reel-play" type="button" aria-label="Spill av film">▶</button><div class="vid-status">${f.dur ? esc(f.dur + ' sek') : ''}</div></div></div>${f.caption ? `<figcaption class="caption">▶ ${esc(f.caption)}</figcaption>` : ''}</figure>`;
 }
 function hydrateSeedFilms() {
   document.querySelectorAll('[data-sfilm]:not([data-vh])').forEach(el => {
@@ -328,7 +328,7 @@ function hydrateSeedFilms() {
     if (vidEls.has(key)) { el.innerHTML = ''; vidEls.get(key).forEach(n => el.appendChild(n)); return; }
     const box = el.querySelector('.vid-poster'), st = el.querySelector('.vid-status');
     defaultImageUrl(f.poster).then(u => { const ph = box.querySelector('.vid-ph'); if (u && ph) { const img = new Image(); img.alt = ''; img.src = u; ph.replaceWith(img); } });
-    const dl = dlButton(prog => encFilmBlob(f.parts, f.mime, (d, n) => prog(Math.round(d / n * 100))), f.file);
+    const dl = dlButton(prog => encFilmBlob(f.parts, f.mime, (d, n) => prog(Math.round(d / n * 100))), f.file, 'Last ned filmen', f.desc);
     el.appendChild(dl); vidEls.set(key, [box, dl]);
     box.onclick = async () => {
       if (el.dataset.loading) return; el.dataset.loading = '1';
@@ -402,7 +402,7 @@ function reelVideo() {
   reelEl.innerHTML = `<div class="reel-poster"><img alt=""><button class="reel-play" aria-label="Spill av">▶</button><div class="reel-status"></div></div>`;
   defaultImageUrl(R.poster).then(u => { if (u) reelEl.querySelector('img').src = u; });
   const poster = reelEl.querySelector('.reel-poster'), st = reelEl.querySelector('.reel-status');
-  reelEl.appendChild(dlButton(prog => encFilmBlob(R.parts, 'video/mp4', (d, n) => prog(Math.round(d / n * 100))), R.file || 'padel-posten-filmavisen.mp4'));
+  reelEl.appendChild(dlButton(prog => encFilmBlob(R.parts, 'video/mp4', (d, n) => prog(Math.round(d / n * 100))), R.file || 'padel-posten-filmavisen.mp4', 'Last ned filmen', R.dl || ''));
   poster.onclick = async () => {
     if (reelEl.dataset.loading) return; reelEl.dataset.loading = '1';
     st.textContent = 'Henter filmen fra trykkeriet… 0 %';
@@ -692,7 +692,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 22;
+const APP_VER = 23;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
