@@ -1,0 +1,36 @@
+name: Trykkeriet
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+concurrency:
+  group: trykkeriet
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: _main
+      - name: Hent nye saker
+        run: python3 _main/scripts/sync.py
+        env:
+          TOPIC: pp-gazette-37c0c697001f54c449e6
+      - name: Lagre
+        run: |
+          git config user.name "padel-posten-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if ! git diff --cached --quiet; then
+            git commit -m "Trykkeriet: nye saker"
+            for i in 1 2 3; do git push && break; git pull --rebase; done
+          fi
