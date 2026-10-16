@@ -318,7 +318,7 @@ function viewLooks(S) {
       <div class="looks">${g.looks.map((l, i) => {
         const pct = tot ? Math.round(100 * t[i] / tot) : 0;
         return `<div class="look ${mine === i ? 'mine' : ''}">
-          <div class="halftone">${l.img ? `<img loading="lazy" src="${esc(l.img)}" alt="${esc(l.name)}">` : `<div class="initials">${esc(l.name.split(' ').map(w => w[0]).slice(0, 2).join(''))}</div>`}</div>
+          <div class="halftone"${l.img ? ` data-defimg="${esc(l.img)}" data-hot="${esc(l.hot || '')}"` : ''}>${l.img && !String(l.img).startsWith('data/') ? `<img loading="lazy" src="${esc(l.img)}" alt="${esc(l.name)}">` : `<div class="initials">${esc(l.name.split(' ').map(w => w[0]).slice(0, 2).join(''))}</div>`}</div>
           ${l.credit ? `<div class="credit"><a href="${esc(l.src)}" target="_blank" rel="noopener">${esc(l.credit)}</a></div>` : ''}
           <p class="look-name">${esc(l.name)}</p><div class="look-what">${esc(l.what)}</div>
           <p class="look-cap">${esc(l.cap)}</p>
@@ -393,8 +393,15 @@ function bindWrite() {
     } catch (e) { toast(e.message, 4000); go.disabled = false; go.textContent = 'Send til trykkeriet'; }
   };
 }
+let celebBundle;
 async function defaultImageUrl(path) {
   if (blobCache.has(path)) return blobCache.get(path);
+  if (path.includes('#')) {
+    const [file, key] = path.split('#');
+    celebBundle ||= (async () => { const r = await fetchFirst([file + '?v=' + APP_VER, REPO_RAW + file]); const t = (await r.text()).trim(); return JSON.parse(dec.decode(await decBytes(b64.dec(t.slice(3))))); })().catch(() => { celebBundle = null; return {}; });
+    const pr = celebBundle.then(m => m[key] ? URL.createObjectURL(new Blob([b64.dec(m[key])], { type: 'image/jpeg' })) : null).catch(() => null);
+    blobCache.set(path, pr); return pr;
+  }
   const pr = (async () => { try {
     const r = await fetchFirst(dataUrls(path).map(u => u.replace(/\?t=\d+$/, '')));
     const t = (await r.text()).trim();
@@ -405,7 +412,7 @@ async function defaultImageUrl(path) {
 }
 function hydrateImages() {
   document.querySelectorAll('[data-defimg]').forEach(async el => {
-    const u = await defaultImageUrl(el.dataset.defimg);
+    const u = (await defaultImageUrl(el.dataset.defimg)) || el.dataset.hot || null;
     if (u && el.isConnected) { const img = new Image(); img.alt = ''; img.src = u; el.innerHTML = ''; el.appendChild(img); }
   });
   document.querySelectorAll('[data-img]').forEach(async el => {
@@ -450,7 +457,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 9;
+const APP_VER = 10;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
