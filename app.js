@@ -214,6 +214,16 @@ function reelVideo() {
   };
   return reelEl;
 }
+function userParas(a) {
+  const ps = esc(a.body).split(/\n\s*\n|\n/).filter(p => p.trim()).map(p => `<p>${p}</p>`);
+  const ex = Array.isArray(a.photos) ? a.photos.filter(x => x && typeof x.id === 'string').slice(0, 8) : [];
+  if (!ex.length) return ps.join('');
+  const fig = x => `<figure class="article-photo inline"><div class="halftone" data-img="${esc(x.id)}"><div class="initials">⌛</div></div>${x.caption ? `<figcaption class="caption">${esc(x.caption)}</figcaption>` : ''}</figure>`;
+  const out = []; let k = 0;
+  ps.forEach((p, i) => { out.push(p); while (k < ex.length && (i + 1) >= Math.ceil((k + 1) * ps.length / (ex.length + 1))) out.push(fig(ex[k++])); });
+  while (k < ex.length) out.push(fig(ex[k++]));
+  return out.join('');
+}
 function richParas(a) {
   return a.body.split(/\n\s*\n|\n/).filter(p => p.trim()).map(p => {
     const m = p.match(/^\[\[bilde:(\d+)\]\]$/);
@@ -230,7 +240,7 @@ function articleHtml(a, lead) {
     ${a.sub ? `<p class="deck">${esc(a.sub)}</p>` : ''}
     <div class="byline"><span>Av ${esc(a.author || 'Anonym kilde')}</span><span>${esc(fmtDate(a.date).replace(/^\w+ /, ''))}</span></div>
     ${a.photo || a.defphoto ? `<figure class="article-photo"><div class="halftone" ${a.photo ? `data-img="${esc(a.photo)}"` : `data-defimg="${esc(a.defphoto)}"`}><div class="initials">⌛</div></div>${a.caption ? `<figcaption class="caption">${esc(a.caption)}</figcaption>` : ''}</figure>` : ''}
-    <div class="body">${a.seed ? richParas(a) : paras(a.body)}</div>
+    <div class="body">${a.seed ? richParas(a) : userParas(a)}</div>
     ${own ? `<button class="del" data-del="${esc(a.aid)}">Trekk tilbake saken</button>` : ''}
   </article>`;
 }
@@ -323,8 +333,9 @@ function viewWrite() {
     <label for="f-h">Overskrift *</label><input id="f-h" required maxlength="120" placeholder="F.eks. SJOKKTAP I FØRSTE KAMP">
     <label for="f-s">Ingress</label><input id="f-s" maxlength="200" placeholder="Én saftig setning">
     <label for="f-b">Brødtekst *</label><textarea id="f-b" required placeholder="Fortell alt. Overdriv gjerne."></textarea>
-    <label for="f-p">Bilde (valgfritt)</label><input id="f-p" type="file" accept="image/*"><img id="preview-img" alt="">
-    <label for="f-c">Bildetekst</label><input id="f-c" maxlength="160" placeholder="F.eks. Her ser vi Baard etter tredje sett">
+    <label for="f-p">Bilder (valgfritt, opptil 8 – første blir hovedbilde)</label><input id="f-p" type="file" accept="image/*" multiple>
+    <div id="f-pics" class="pics"></div>
+    <p class="hint">Velg flere bilder på en gang, eller trykk igjen for å legge til flere. Skriv en bildetekst under hvert bilde.</p>
     <label for="f-a">Byline</label><input id="f-a" list="guylist" maxlength="60" value="${esc(last)}" placeholder="Ditt navn eller «Anonym kilde»">
     <datalist id="guylist">${C.guys.map(g => `<option value="${esc(g.name)}">`).join('')}<option value="Anonym kilde"></datalist>
     <label for="f-d">Utgave (dato)</label><input id="f-d" type="date" value="${today}">
@@ -333,17 +344,27 @@ function viewWrite() {
   </form>`;
 }
 function bindWrite() {
-  const p = $('#f-p'), pv = $('#preview-img');
-  p.onchange = () => { const f = p.files[0]; if (f) { pv.src = URL.createObjectURL(f); pv.style.display = 'block'; } else pv.style.display = 'none'; };
+  const p = $('#f-p'), box = $('#f-pics'); const pics = [];
+  const draw = () => {
+    box.innerHTML = pics.map((x, k) => `<div class="pic"><img src="${x.url}" alt=""><button type="button" class="pic-x" data-k="${k}" aria-label="Fjern">✕</button><input data-c="${k}" maxlength="160" value="${esc(x.caption)}" placeholder="${k ? 'Bildetekst' : 'Bildetekst (hovedbilde)'}"></div>`).join('');
+    box.querySelectorAll('[data-c]').forEach(i => i.oninput = () => pics[+i.dataset.c].caption = i.value);
+    box.querySelectorAll('.pic-x').forEach(b => b.onclick = () => { pics.splice(+b.dataset.k, 1); draw(); });
+  };
+  p.onchange = () => { for (const f of p.files) if (pics.length < 8) pics.push({ file: f, url: URL.createObjectURL(f), caption: '' }); p.value = ''; draw(); };
   $('#write-form').onsubmit = async ev => {
     ev.preventDefault(); const go = $('#f-go'); go.disabled = true;
     try {
       const a = { t: 'article', aid: 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), by: clientId,
-        headline: $('#f-h').value.trim(), sub: $('#f-s').value.trim(), body: $('#f-b').value.trim(), caption: $('#f-c').value.trim(),
+        headline: $('#f-h').value.trim(), sub: $('#f-s').value.trim(), body: $('#f-b').value.trim(),
         author: $('#f-a').value.trim() || 'Anonym kilde', date: $('#f-d').value || osloDate() };
       if (!a.headline || !a.body) throw new Error('Overskrift og brødtekst må fylles ut.');
       LS.set('pp_author', $('#f-a').value.trim());
-      if (p.files[0]) { go.textContent = 'Laster opp bilde…'; a.photo = await publishPhoto(p.files[0], 'art:' + a.aid, 1400); }
+      const up = [];
+      for (let k = 0; k < pics.length; k++) {
+        go.textContent = `Laster opp bilde ${k + 1} av ${pics.length}…`;
+        up.push({ id: await publishPhoto(pics[k].file, 'art:' + a.aid, 1400), caption: pics[k].caption.trim() });
+      }
+      if (up.length) { a.photo = up[0].id; a.caption = up[0].caption; if (up.length > 1) a.photos = up.slice(1); }
       go.textContent = 'Trykker…';
       await publish(a);
       toast('Stopp pressen! Saken er trykket.');
