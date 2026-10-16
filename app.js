@@ -36,7 +36,7 @@ const osloDate = (d = new Date()) => new Intl.DateTimeFormat('sv-SE', { timeZone
 const fmtDate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Intl.DateTimeFormat('nb-NO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d))); };
 const dayNo = iso => Math.round((Date.parse(iso) - Date.parse(DAY1)) / 864e5) + 1;
 const edLabel = iso => { const n = dayNo(iso); return n >= 1 && n <= 5 ? `Utgave nr. ${n} · Dag ${n} av 5` : n < 1 ? 'Forhåndsutgave' : 'Ettertrykk'; };
-const paras = t => esc(t).split(/\n\s*\n|\n/).filter(p => p.trim()).map(p => `<p>${p}</p>`).join('');
+const paras = t => esc(t).split(/\n\s*\n|\n/).filter(p => p.trim() && !/^\[\[.*\]\]$/.test(p.trim())).map(p => `<p>${p}</p>`).join('');
 function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, ms); }
 const guyById = id => C.guys.find(g => g.id === id);
 const SIL = '<svg viewBox="0 0 100 110"><circle cx="50" cy="34" r="22"/><path d="M8 110c0-28 19-44 42-44s42 16 42 44z"/></svg>';
@@ -215,7 +215,7 @@ function reelVideo() {
   return reelEl;
 }
 function userParas(a) {
-  const ps = esc(a.body).split(/\n\s*\n|\n/).filter(p => p.trim()).map(p => `<p>${p}</p>`);
+  const ps = esc(a.body).split(/\n\s*\n|\n/).filter(p => p.trim() && !/^\[\[.*\]\]$/.test(p.trim())).map(p => `<p>${p}</p>`);
   const ex = Array.isArray(a.photos) ? a.photos.filter(x => x && typeof x.id === 'string').slice(0, 8) : [];
   if (!ex.length) return ps.join('');
   const fig = x => `<figure class="article-photo inline"><div class="halftone" data-img="${esc(x.id)}"><div class="initials">⌛</div></div>${x.caption ? `<figcaption class="caption">${esc(x.caption)}</figcaption>` : ''}</figure>`;
@@ -225,9 +225,10 @@ function userParas(a) {
   return out.join('');
 }
 function richParas(a) {
-  return a.body.split(/\n\s*\n|\n/).filter(p => p.trim()).map(p => {
+  return (a.rich || a.body).split(/\n\s*\n|\n/).filter(p => p.trim()).map(p => {
     const m = p.match(/^\[\[bilde:(\d+)\]\]$/);
     if (m) { const x = (a.extra || [])[+m[1] - 1]; return x ? `<figure class="article-photo inline"><div class="halftone" data-defimg="${esc(x.photo)}"><div class="initials">⌛</div></div>${x.caption ? `<figcaption class="caption">${esc(x.caption)}</figcaption>` : ''}</figure>` : ''; }
+    if (/^\[\[.*\]\]$/.test(p.trim())) return '';
     if (p.startsWith('## ')) return `<h4 class="mellomtittel">${esc(p.slice(3))}</h4>`;
     return `<p>${esc(p)}</p>`;
   }).join('');
@@ -427,8 +428,19 @@ async function unlock(pw) {
   const r = await fetchFirst(dataUrls('data/content.enc'), { cache: 'no-store' });
   C = await decStr((await r.text()).trim());
   TOPIC = C.topic;
+  if (C.appMin > APP_VER) checkVersion();
 }
+const APP_VER = 7;
+async function checkVersion() {
+  try {
+    const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
+    const v = (await r.json()).v;
+    if (v > APP_VER) { const k = 'pp_reload_' + v; if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); location.replace(location.pathname + '?v=' + v + '&t=' + Date.now() + location.hash); }
+  } catch {}
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
 async function start() {
+  checkVersion();
   $('#gate').hidden = true; $('#app').hidden = false;
   render();
   await loadRepoEvents();
