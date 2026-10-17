@@ -433,6 +433,7 @@ function richParas(a) {
     const m = p.match(/^\[\[bilde:(\d+)\]\]$/);
     if (m) { const x = (a.extra || [])[+m[1] - 1]; return x ? `<figure class="article-photo inline"><div class="halftone" data-defimg="${esc(x.photo)}"><div class="initials">⌛</div></div>${x.caption ? `<figcaption class="caption">${esc(x.caption)}</figcaption>` : ''}</figure>` : ''; }
     if (p.trim() === '[[film]]' && a.film && Array.isArray(a.film.parts)) return seedFilmFig(a.film);
+    { const mm = p.trim().match(/^\[\[film:(\d+)\]\]$/); if (mm && Array.isArray(a.films) && a.films[+mm[1]] && Array.isArray(a.films[+mm[1]].parts)) return seedFilmFig(a.films[+mm[1]]); }
     if (/^\[\[.*\]\]$/.test(p.trim())) return '';
     if (p.startsWith('## ')) return `<h4 class="mellomtittel">${esc(p.slice(3))}</h4>`;
     return `<p>${esc(p)}</p>`;
@@ -712,7 +713,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 25;
+const APP_VER = 26;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
