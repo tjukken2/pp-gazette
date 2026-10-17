@@ -69,7 +69,12 @@ function fromNtfy(m) {
   return e;
 }
 let renderT;
-function scheduleRender() { clearTimeout(renderT); renderT = setTimeout(async () => { await decodeAll(); render(); }, 250); }
+let renderPending = false;
+function scheduleRender() { clearTimeout(renderT); renderT = setTimeout(async () => {
+  await decodeAll();
+  // Ikke riv ned skjemaet mens noen skriver i undersøkelsen: oppdater bare tallene, full render etterpå.
+  if (pollEl && pollEl.isConnected && pollEl.contains(document.activeElement)) { updatePoll(state()); if (!renderPending) { renderPending = true; pollEl.addEventListener('focusout', () => { renderPending = false; setTimeout(() => { if (!pollEl.contains(document.activeElement)) scheduleRender(); }, 300); }, { once: true }); } return; }
+  render(); }, 250); }
 function connectLive() {
   const st = $('#sync-status');
   try {
@@ -115,13 +120,14 @@ async function imageUrl(id) {
 /* ---------- state derivation ---------- */
 function state() {
   const list = [...events.values()].sort((a, b) => a.time - b.time || (a.id < b.id ? -1 : 1));
-  const articles = new Map(), dels = [], votes = {}, photos = {};
+  const articles = new Map(), dels = [], votes = {}, photos = {}, pollV = {};
   for (const s of C.seed) articles.set(s.aid, { ...s, seed: true, ts: Date.parse(s.time || (s.date + 'T08:00:00Z')) / 1000 });
   for (const e of list) {
     const p = decoded.get(e.id); if (!p) continue;
     if (p.t === 'article' && Array.isArray(C.hidden) && C.hidden.includes(p.aid)) continue;
     if (p.t === 'article' && p.aid && p.headline) articles.set(p.aid, { ...p, ts: e.time, eid: e.id });
     else if (p.t === 'del') dels.push(p);
+    else if (p.t === 'poll' && p.q === POLL.id && typeof p.d === 'string' && p.d.length >= 8 && Number.isInteger(p.n) && p.n >= 0 && p.n <= POLL.max) { delete pollV[p.d]; pollV[p.d] = p.n; }
     else if (p.t === 'vote' && guyById(p.guy) && p.c >= 0 && p.c < 4) { (votes[p.guy] ||= {})[p.voter] = p.c; }
     else if (p.t === 'photo' && p.target && p.target.startsWith('guy:')) photos[p.target.slice(4)] = e.id;
   }
@@ -129,7 +135,7 @@ function state() {
   const tally = {};
   for (const g of C.guys) { const t = [0, 0, 0, 0]; for (const c of Object.values(votes[g.id] || {})) t[c]++; tally[g.id] = t; }
   const arts = [...articles.values()].sort((a, b) => b.date.localeCompare(a.date) || b.ts - a.ts);
-  return { arts, tally, photos };
+  return { arts, tally, photos, poll: Object.values(pollV) };
 }
 
 /* ---------- publishing ---------- */
@@ -392,6 +398,7 @@ function render() {
     v.innerHTML = viewEdition(S, front, true);
   }
   const slot = $('#reel-slot'); if (slot) slot.appendChild(reelVideo());
+  const ps = $('#poll-slot'); if (ps) ps.appendChild(updatePoll(S));
   hydrateImages(S);
 }
 let reelEl;
@@ -470,7 +477,7 @@ function viewEdition(S, date, front) {
   const prev = dates[i + 1], next = dates[i - 1];
   let html = `<div class="kicker" style="text-align:center">${esc(edLabel(date))} · ${esc(fmtDate(date))}</div>`;
   if (front) html += `<figure class="reel-video"><div id="reel-slot"></div><figcaption class="caption">▶ ${esc((C.reel && C.reel.label) || 'Dagens nyhetsinnslag')}</figcaption></figure>`;
-  if (front) html += todayBox();
+  if (front) html += todayBox() + '<div id="poll-slot"></div>';
   if (!arts.length) html += quoteBox(date) + resultsBox(date);
   if (!arts.length) html += `<p class="empty">Ingen saker i denne utgaven ennå. Redaksjonen sover. <a href="#/skriv">Skriv den første!</a></p>`;
   else {
@@ -504,6 +511,72 @@ function progItems(d) {
 function todayBox() {
   const d = progDays().find(x => x.date === osloDate()); if (!d) return '';
   return `<aside class="today-box"><div class="tb-head"><span>I DAG</span><span>${esc(fmtProgDay(d.date))}</span></div><div class="tb-title">${esc(d.title)}</div>${progItems(d)}<a class="tb-more" href="#/program">Hele programmet →</a></aside>`;
+}
+/* ---------- anonym undersøkelse (v27) ----------
+   Stemme = {t:'poll', q, d, n}. d er en tilfeldig enhets-id kun for denne undersøkelsen (ikke clientId, ikke navn).
+   Siste stemme per d teller. Viser kun antall, snitt og median (fra 3 svar) og grov fordeling (fra 5 svar). */
+const POLL = { id: 'sx1', q: 'Hvor mange ganger har du sex i måneden?', min: 3, hist: 5, max: 60 };
+const pollDev = () => LS.get('pp_poll_dev') || (() => { const v = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join(''); LS.set('pp_poll_dev', v); return v; })();
+const nf1 = x => new Intl.NumberFormat('nb-NO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(x);
+const nfm = x => new Intl.NumberFormat('nb-NO', { maximumFractionDigits: 1 }).format(x);
+function pollCheck(raw) {
+  const s = String(raw || '').trim().replace(/\s/g, '');
+  if (!s) return 'Skriv et tall. Null er også et svar.';
+  if (/^-/.test(s)) return 'Minus? Da er det noe du ikke forteller oss.';
+  if (!/^\d+$/.test(s)) return 'Bare hele tall, takk. Dette er en seriøs avis.';
+  const n = +s;
+  if (n > POLL.max) return 'Redaksjonen tror ikke på deg. Prøv et tall mellom 0 og 60.';
+  return n;
+}
+function pollStats(vals) {
+  const a = [...vals].sort((x, y) => x - y), n = a.length;
+  if (!n) return { n };
+  const avg = a.reduce((s, x) => s + x, 0) / n;
+  const med = n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
+  const B = [['0', x => x === 0], ['1–2', x => x >= 1 && x <= 2], ['3–5', x => x >= 3 && x <= 5], ['6–10', x => x >= 6 && x <= 10], ['11+', x => x >= 11]];
+  return { n, avg, med, hist: B.map(([l, f]) => [l, a.filter(f).length]) };
+}
+let pollEl;
+function pollBox() {
+  if (pollEl) return pollEl;
+  pollEl = document.createElement('aside'); pollEl.className = 'poll-box'; pollEl.id = 'poll-box';
+  pollEl.innerHTML = `<div class="pb-head">PADEL-POSTENS STORE ANONYME UNDERSØKELSE</div>
+    <div class="pb-q">«${esc(POLL.q)}»</div>
+    <form class="pb-form" novalidate><input id="pb-n" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="0–60" aria-label="Antall ganger i måneden"><button type="submit">Send anonymt</button></form>
+    <div class="pb-done" hidden>✓ Ditt svar er registrert. <button type="button" class="pb-edit">Endre svar</button></div>
+    <div class="pb-msg" role="status"></div>
+    <div class="pb-res"></div>
+    <div class="pb-fine">Helt anonymt: ingen navn, ingen innlogging. Én stemme per telefon – nytt svar erstatter det gamle. Ingen enkeltsvar vises.</div>`;
+  const form = $('.pb-form', pollEl), inp = $('#pb-n', pollEl), msg = $('.pb-msg', pollEl), done = $('.pb-done', pollEl), btn = $('button', form);
+  const showForm = f => { form.hidden = !f; done.hidden = f; };
+  showForm(!LS.get('pp_poll_' + POLL.id, false));
+  $('.pb-edit', pollEl).onclick = () => { showForm(true); inp.value = ''; msg.textContent = ''; inp.focus(); };
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const n = pollCheck(inp.value);
+    if (typeof n === 'string') { msg.textContent = n; msg.className = 'pb-msg err'; return; }
+    btn.disabled = true; inp.disabled = true; msg.className = 'pb-msg'; msg.textContent = 'Sender anonymt…';
+    try {
+      await new Promise(r => setTimeout(r, 1500 + Math.random() * 3500)); // litt tilfeldig forsinkelse: tidspunktet avslører mindre
+      await publish({ t: 'poll', q: POLL.id, d: pollDev(), n });
+      LS.set('pp_poll_' + POLL.id, true); inp.value = ''; msg.textContent = 'Takk! Svaret er talt – og glemt.'; showForm(false); scheduleRender();
+    } catch (err) { msg.className = 'pb-msg err'; msg.textContent = 'Trykkeriet svarte ikke. Prøv igjen.'; }
+    finally { btn.disabled = false; inp.disabled = false; }
+  };
+  return pollEl;
+}
+function updatePoll(S) {
+  const el = pollBox(), st = pollStats(S.poll || []), res = $('.pb-res', el);
+  let h;
+  if (st.n < POLL.min) h = `<div class="pb-wait"><b>${st.n}</b> ${st.n === 1 ? 'svar' : 'svar'} så langt. Tallene vises når minst ${POLL.min} har svart – av hensyn til anonymiteten.</div>`;
+  else {
+    h = `<div class="vstats"><div><b>${st.n}</b><span>Svar</span></div><div><b>${nf1(st.avg)}</b><span>Snitt</span></div><div><b>${nfm(st.med)}</b><span>Median</span></div></div>`;
+    if (st.n >= POLL.hist) { const mx = Math.max(...st.hist.map(x => x[1]), 1); h += `<table class="pb-hist">${st.hist.map(([l, c]) => `<tr><td class="hl">${l}</td><td>${c ? `<span class="hb" style="width:${Math.round(c / mx * 100)}%"></span>` : ""}</td><td class="hc">${c}</td></tr>`).join('')}</table>`; }
+    else h += `<div class="pb-wait">Fordelingen vises fra ${POLL.hist} svar.</div>`;
+    h += `<div class="pb-quip">Snittet er sannsynligvis løgn, men det er vår løgn.</div>`;
+  }
+  if (res.innerHTML !== h) res.innerHTML = h;
+  return el;
 }
 function viewProgram() {
   const P = C.program; if (!P) return '<p class="empty">Programmet er ikke trykket ennå.</p>';
@@ -713,7 +786,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 26;
+const APP_VER = 27;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;

@@ -225,3 +225,23 @@ table.results tr.win td{color:var(--red);font-weight:700}
 .vthumb img,.vthumb video{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#120e09}
 .vplay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;background:rgba(18,14,9,.7);color:#efe4c8;border:2px solid #efe4c8;display:flex;align-items:center;justify-content:center;font-size:18px;padding-left:3px;box-sizing:border-box}
 .vdur{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.75);color:#fff;font-size:12px;padding:1px 6px;border-radius:3px}
+
+.poll-box{border:3px double var(--rule);padding:10px 12px;margin:12px 0 16px;background:rgba(139,26,16,.05)}
+.pb-head{font-family:"Playfair Display",serif;font-weight:900;letter-spacing:.06em;border-bottom:1px solid var(--rule);padding-bottom:4px;color:var(--red);font-size:15px;text-align:center}
+.pb-q{font-family:"Playfair Display",serif;font-weight:700;font-style:italic;font-size:1.3em;text-align:center;margin:8px 0}
+.pb-form{display:flex;gap:8px;justify-content:center;margin:6px 0}
+.pb-form input{width:5.5em;font-size:20px;text-align:center;padding:6px;border:1px solid var(--ink);background:#fffdf6;font-family:inherit}
+.pb-form button,.pb-edit{font-family:"Playfair Display",serif;font-weight:700;background:var(--ink);color:var(--paper);border:none;padding:8px 14px;font-size:16px;cursor:pointer}
+.pb-edit{font-size:13px;padding:4px 8px;margin-left:6px}
+.pb-done{text-align:center;margin:6px 0}
+.pb-msg{text-align:center;font-style:italic;min-height:1.2em;font-size:15px}
+.pb-msg.err{color:var(--red);font-weight:700}
+.pb-wait{text-align:center;font-size:15px;margin:6px 0}
+.pb-hist{width:100%;border-collapse:collapse;margin:4px 0 6px;font-size:14px}
+.pb-hist td{padding:2px 4px}
+.pb-hist .hl{width:3.5em;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pb-hist .hc{width:2em;text-align:right;font-variant-numeric:tabular-nums}
+.pb-hist .hb{display:block;height:12px;background:var(--ink);min-width:2px}
+.pb-quip{font-style:italic;color:var(--red);text-align:center;font-size:15px;margin-top:4px}
+.pb-fine{font-size:12px;color:var(--ink2);text-align:center;margin-top:6px;border-top:1px dotted var(--ink2);padding-top:4px}
+.poll-box [hidden]{display:none!important}
