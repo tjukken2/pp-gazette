@@ -212,3 +212,16 @@ table.results tr.win td{color:var(--red);font-weight:700}
 .vid-dl .film-dl{padding:4px 0 0;background:none;border-top:0}
 .film-dl-desc{font-weight:700;color:#2a2117}
 .film-dl-hint:empty{display:none}
+
+/* Bilder/video-velger (v24) */
+.media-pick{border:1px solid var(--rule);background:rgba(255,255,255,.22);padding:10px;margin:14px 0 4px}
+.media-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.media-title span{font-weight:400;text-transform:none;letter-spacing:0;font-style:italic}
+.form label.media-btn{display:block;text-align:center;margin:8px 0 6px;padding:14px 10px;border:2px dashed var(--ink);background:var(--paper);font-weight:700;font-size:17px;letter-spacing:.02em;cursor:pointer;color:var(--ink);text-transform:none}
+.form label.media-btn:active{background:var(--paper2)}
+.media-input{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0)}
+.media-pick .pics{margin-top:8px}
+.vthumb{position:relative;cursor:pointer;background:#120e09}
+.vthumb img,.vthumb video{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#120e09}
+.vplay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;background:rgba(18,14,9,.7);color:#efe4c8;border:2px solid #efe4c8;display:flex;align-items:center;justify-content:center;font-size:18px;padding-left:3px;box-sizing:border-box}
+.vdur{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.75);color:#fff;font-size:12px;padding:1px 6px;border-radius:3px}

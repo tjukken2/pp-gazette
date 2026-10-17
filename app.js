@@ -572,13 +572,16 @@ function viewWrite() {
   <form id="write-form" class="form">
     <label for="f-h">Overskrift *</label><input id="f-h" required maxlength="120" placeholder="F.eks. SJOKKTAP I FØRSTE KAMP">
     <label for="f-s">Ingress</label><input id="f-s" maxlength="200" placeholder="Én saftig setning">
+    <div class="media-pick">
+      <div class="media-title">Bilder og video <span>(valgfritt)</span></div>
+      <label class="media-btn" for="f-m">📷 🎬 Legg til bilder/video</label>
+      <input id="f-m" class="media-input" type="file" accept="image/*,video/*" multiple>
+      <p class="hint">Velg fra Bilder-appen – gjerne flere på en gang: opptil 8 bilder og én video (maks 60 sek og 15 MB). Første bilde blir hovedbilde.</p>
+      <div id="f-vid"></div>
+      <div id="f-pics" class="pics"></div>
+    </div>
+    <p class="hint">For lang video? Trim klippet i Bilder-appen (Rediger) først. På hotell-Wi-Fi deler alle en felles kvote – bruk gjerne mobildata.</p>
     <label for="f-b">Brødtekst *</label><textarea id="f-b" required placeholder="Fortell alt. Overdriv gjerne."></textarea>
-    <label for="f-p">Bilder (valgfritt, opptil 8 – første blir hovedbilde)</label><input id="f-p" type="file" accept="image/*" multiple>
-    <div id="f-pics" class="pics"></div>
-    <p class="hint">Velg flere bilder på en gang, eller trykk igjen for å legge til flere. Skriv en bildetekst under hvert bilde.</p>
-    <label for="f-v">Video (valgfritt, ett klipp – maks 60 sek og 15 MB)</label><input id="f-v" type="file" accept="video/*,.mov,.mp4">
-    <div id="f-vid"></div>
-    <p class="hint">Korte klipp fungerer best. For stort? Trim klippet i Bilder-appen (Rediger) først. På hotell-Wi-Fi deler alle en felles kvote – bruk gjerne mobildata.</p>
     <label for="f-a">Byline</label><input id="f-a" list="guylist" maxlength="60" value="${esc(last)}" placeholder="Ditt navn eller «Anonym kilde»">
     <datalist id="guylist">${C.guys.map(g => `<option value="${esc(g.name)}">`).join('')}<option value="Anonym kilde"></datalist>
     <label for="f-d">Utgave (dato)</label><input id="f-d" type="date" value="${today}">
@@ -587,24 +590,41 @@ function viewWrite() {
   </form>`;
 }
 function bindWrite() {
-  const p = $('#f-p'), box = $('#f-pics'); const pics = [];
+  const mIn = $('#f-m'), box = $('#f-pics'); const pics = [];
   const draw = () => {
     box.innerHTML = pics.map((x, k) => `<div class="pic"><img src="${x.url}" alt=""><button type="button" class="pic-x" data-k="${k}" aria-label="Fjern">✕</button><input data-c="${k}" maxlength="160" value="${esc(x.caption)}" placeholder="${k ? 'Bildetekst' : 'Bildetekst (hovedbilde)'}"></div>`).join('');
     box.querySelectorAll('[data-c]').forEach(i => i.oninput = () => pics[+i.dataset.c].caption = i.value);
     box.querySelectorAll('.pic-x').forEach(b => b.onclick = () => { pics.splice(+b.dataset.k, 1); draw(); });
   };
-  const vIn = $('#f-v'), vBox = $('#f-vid'); let vid = null;
-  const drawV = () => { vBox.innerHTML = vid ? `<div class="pic vpic">${vid.posterUrl ? `<img src="${vid.posterUrl}" alt="">` : '<div class="vid-ph small">🎬</div>'}<div class="vmeta">🎬 ${esc(vid.file.name || 'video')} · ${vid.info.dur ? Math.round(vid.info.dur) + ' sek · ' : ''}${fmtMB(vid.file.size)}</div><button type="button" class="pic-x" id="f-vx" aria-label="Fjern">✕</button><input id="f-vc" maxlength="160" value="${esc(vid.caption)}" placeholder="Videotekst"></div>` : '';
-    if (vid) { $('#f-vc').oninput = e => vid.caption = e.target.value; $('#f-vx').onclick = () => { vid = null; drawV(); }; } };
-  vIn.onchange = async () => {
-    const f = vIn.files[0]; vIn.value = ''; if (!f) return;
-    if (f.size > VID_MAX) { vid = null; drawV(); toast(videoProblem(f, {}), 6000); return; }
+  const vBox = $('#f-vid'); let vid = null;
+  const fmtDur = d => { d = Math.round(d || 0); return `${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}`; };
+  const drawV = () => {
+    vBox.innerHTML = vid ? `<div class="pic vpic"><div class="vthumb" id="f-vt">${vid.posterUrl ? `<img src="${vid.posterUrl}" alt="">` : '<div class="vid-ph small">🎬</div>'}<span class="vplay">▶</span>${vid.info.dur ? `<span class="vdur">${fmtDur(vid.info.dur)}</span>` : ''}</div><div class="vmeta">🎬 Video · ${vid.info.dur ? Math.round(vid.info.dur) + ' sek · ' : ''}${fmtMB(vid.file.size)}</div><button type="button" class="pic-x" id="f-vx" aria-label="Fjern video">✕</button><input id="f-vc" maxlength="160" value="${esc(vid.caption)}" placeholder="Videotekst"></div>` : '';
+    if (!vid) return;
+    $('#f-vc').oninput = e => vid.caption = e.target.value;
+    $('#f-vx').onclick = () => { if (vid.url) URL.revokeObjectURL(vid.url); vid = null; drawV(); };
+    $('#f-vt').onclick = () => { const t = $('#f-vt'); if (t.querySelector('video')) return; vid.url ||= URL.createObjectURL(vid.file);
+      const v = document.createElement('video'); v.src = vid.url; v.controls = true; v.playsInline = true; v.setAttribute('playsinline', ''); if (vid.posterUrl) v.poster = vid.posterUrl;
+      t.innerHTML = ''; t.appendChild(v); v.play().catch(() => {}); };
+  };
+  const isVideoFile = f => /^video\//.test(f.type) || /\.(mov|mp4|m4v|3gp|webm)$/i.test(f.name || '');
+  const addVideo = async f => {
+    if (f.size > VID_MAX) { toast(videoProblem(f, {}), 6000); return; }
     vBox.innerHTML = '<p class="hint">Sjekker videoen…</p>';
     const info = await probeVideo(f); const why = videoProblem(f, info);
-    if (why) { vid = null; drawV(); toast(why, 6000); return; }
-    vid = { file: f, info, caption: '', posterUrl: info.poster ? URL.createObjectURL(info.poster) : null }; drawV();
+    if (why) { drawV(); toast(why, 6000); return; }
+    const cap = vid ? vid.caption : ''; if (vid && vid.url) URL.revokeObjectURL(vid.url);
+    vid = { file: f, info, caption: cap, posterUrl: info.poster ? URL.createObjectURL(info.poster) : null }; drawV();
   };
-  p.onchange = () => { for (const f of p.files) if (pics.length < 8) pics.push({ file: f, url: URL.createObjectURL(f), caption: '' }); p.value = ''; draw(); };
+  mIn.onchange = async () => {
+    const files = [...mIn.files]; mIn.value = ''; if (!files.length) return;
+    const vids = files.filter(isVideoFile), imgs = files.filter(f => !isVideoFile(f));
+    let skipped = 0;
+    for (const f of imgs) { if (pics.length < 8) pics.push({ file: f, url: URL.createObjectURL(f), caption: '' }); else skipped++; }
+    draw();
+    if (skipped) toast(`Maks 8 bilder – ${skipped} ble ikke lagt til.`, 4000);
+    if (vids.length) { if (vids.length > 1 || vid) toast(vids.length > 1 ? 'Kun én video per sak – jeg tok den første.' : 'Kun én video per sak – den nye erstatter den forrige.', 4500); await addVideo(vids[0]); }
+  };
   $('#write-form').onsubmit = async ev => {
     ev.preventDefault(); const go = $('#f-go'); go.disabled = true;
     try {
@@ -692,7 +712,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 23;
+const APP_VER = 24;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
