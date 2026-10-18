@@ -247,3 +247,6 @@ table.results tr.win td{color:var(--red);font-weight:700}
 .poll-box [hidden]{display:none!important}
 
 .bday{display:inline-block;font-family:"Playfair Display",serif;font-size:12px;font-weight:700;letter-spacing:.04em;background:var(--red);color:#fff;padding:2px 7px;vertical-align:middle;white-space:nowrap}
+.quote-box.multi .qb-quote{font-size:25px;margin-top:12px}
+.quote-box.multi .qb-quote:first-of-type{margin-top:6px}
+.quote-box.multi .qb-quip{margin-top:12px;border-top:1px dotted var(--ink2);padding-top:6px}

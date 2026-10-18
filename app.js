@@ -460,7 +460,7 @@ function articleHtml(a, lead) {
 }
 // DAGENS SITAT: content.quotes = [{date, quote, by, quip}] – shown in that date's edition (and on the front page while it is the latest edition)
 function quoteBox(date) {
-  return ((C && C.quotes) || []).filter(q => q.date === date).map(q => `<aside class="quote-box"><div class="qb-head">DAGENS SITAT</div><blockquote class="qb-quote">«${esc(q.quote)}»</blockquote>${q.by ? `<div class="qb-by">– ${esc(q.by)}</div>` : ''}${q.quip ? `<div class="qb-quip">${esc(q.quip)}</div>` : ''}</aside>`).join('');
+  return ((C && C.quotes) || []).filter(q => q.date === date).map(q => `<aside class="quote-box${q.items ? ' multi' : ''}"><div class="qb-head">${esc(q.title || 'DAGENS SITAT')}</div>${(q.items || [q]).map(x => `<blockquote class="qb-quote">«${esc(x.quote)}»</blockquote>${x.by ? `<div class="qb-by">– ${esc(x.by)}</div>` : ''}`).join('')}${q.quip ? `<div class="qb-quip">${esc(q.quip)}</div>` : ''}</aside>`).join('');
 }
 // RESULTATER: content.results = [{date, title, rows:[{name, rounds:[..], total, poeng}], notes:[..]}] – sorted by total, ties share rank
 function resultsBox(date) {
@@ -786,7 +786,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 28;
+const APP_VER = 29;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
