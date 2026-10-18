@@ -605,7 +605,7 @@ function viewLooks(S) {
       <div class="guy-head">
         <div><div class="guy-photo halftone" ${S.photos[g.id] ? `data-img="${S.photos[g.id]}"` : g.photo ? `data-defimg="${esc(g.photo)}"` : ''}><div class="silhouette">${SIL}</div></div>
         <label class="upload-btn">📷 ${S.photos[g.id] || g.photo ? 'Bytt bilde' : 'Last opp bilde'}<input type="file" accept="image/*" data-up="${g.id}"></label></div>
-        <div><p class="guy-name">${esc(g.name)}</p>${g.role ? `<div class="guy-role">${esc(g.role)}</div>` : ''}<div class="guy-room">${esc(g.room)}</div><p class="guy-tag">${esc(g.tag)}</p>
+        <div><p class="guy-name">${esc(g.name)}${g.bday && osloDate().slice(5) === g.bday ? ' <span class="bday" title="Bursdag i dag!">🎂 Bursdag i dag!</span>' : ''}</p>${g.role ? `<div class="guy-role">${esc(g.role)}</div>` : ''}<div class="guy-room">${esc(g.room)}</div><p class="guy-tag">${esc(g.tag)}</p>
         <p class="leader">${tot ? `Folkets dom så langt: <b>${esc(g.looks[lead].name)}</b> (${tot} stemme${tot > 1 ? 'r' : ''})` : 'Ingen stemmer ennå. Bli den første!'}</p></div>
       </div>
       <div class="looks">${g.looks.map((l, i) => {
@@ -786,7 +786,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 27;
+const APP_VER = 28;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
