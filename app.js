@@ -134,7 +134,7 @@ function state() {
   for (const d of dels) { const a = articles.get(d.aid); if (a && !a.seed && a.by === d.by) articles.delete(d.aid); }
   const tally = {};
   for (const g of C.guys) { const t = [0, 0, 0, 0]; for (const c of Object.values(votes[g.id] || {})) t[c]++; tally[g.id] = t; }
-  const arts = [...articles.values()].sort((a, b) => b.date.localeCompare(a.date) || b.ts - a.ts);
+  const arts = [...articles.values()].sort((a, b) => b.date.localeCompare(a.date) || (b.seed && b.lead ? 1 : 0) - (a.seed && a.lead ? 1 : 0) || b.ts - a.ts);
   return { arts, tally, photos, poll: Object.values(pollV) };
 }
 
@@ -786,7 +786,7 @@ async function unlock(pw) {
   TOPIC = C.topic;
   if (C.appMin > APP_VER) checkVersion();
 }
-const APP_VER = 30;
+const APP_VER = 31;
 async function checkVersion() {
   try {
     const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
